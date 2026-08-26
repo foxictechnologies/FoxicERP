@@ -59,7 +59,7 @@ export default function InvoiceView({ inv, onClose, ctx }) {
   const bal = ctx.invoiceBalance(inv);
   return (
     <Modal open={!!inv} onClose={onClose} title="Tax Invoice" width="max-w-2xl">
-      <div ref={contentRef} style={{ background: "#ffffff" }}>
+      <div ref={contentRef} className="invoice-print-area" style={{ background: "#ffffff" }}>
       <div className="flex justify-between items-start mb-5 pb-4" style={{ borderBottom: `1px solid ${T.border}` }}>
         <div><div className="font-semibold text-lg" style={{ color: T.navy, fontFamily: "Lexend, sans-serif" }}>{ctx.company.legalName}</div><div className="text-xs mt-1" style={{ color: T.inkFaint }}>{ctx.company.address}, {ctx.company.city}, {ctx.company.state} - {ctx.company.pin}</div><div className="text-xs" style={{ color: T.inkFaint }}>GSTIN: {ctx.company.gstin}</div></div>
         <Badge tone={statusTone(inv.status)}>{inv.status}</Badge>
@@ -94,7 +94,7 @@ export default function InvoiceView({ inv, onClose, ctx }) {
         </div>
       )}
       </div>
-      <div className="flex justify-between items-center gap-2">
+      <div className="no-print flex justify-between items-center gap-2">
         <AttachmentLink path={inv.attachmentUrl} label="View attached proof" />
         <div className="flex justify-end gap-2"><Btn variant="secondary" icon={Printer} onClick={() => window.print()}>Print</Btn><Btn variant="secondary" icon={Download} onClick={exportPdf} disabled={exporting}>{exporting ? "Exporting…" : "Export PDF"}</Btn></div>
       </div>

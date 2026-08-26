@@ -33,13 +33,25 @@ export default function ChangePasswordModal({ open, onClose, logAudit, email }) 
       // Re-verify the current password before allowing a change — otherwise
       // anyone with an unlocked/unattended session could take over the account.
       const check = await supabase.auth.signInWithPassword({ email, password: pw0 });
-      if (check.error) { setError("Current password is incorrect."); return; }
+      if (check.error) { setError(check.error.message?.toLowerCase().includes("invalid") ? "Current password is incorrect." : "Could not verify current password: " + check.error.message); return; }
       const { error: err } = await supabase.auth.updateUser({ password: pw1 });
-      if (err) { setError(err.message); return; }
+      if (err) {
+        // Supabase's "Secure password change" policy blocks updateUser unless
+        // the server itself verified the old password. We already verify it
+        // above via sign-in, so this means the project has that toggle on —
+        // tell the Owner exactly where to switch it off.
+        if (/current password required/i.test(err.message || "")) {
+          setError("Blocked by Supabase's 'Secure password change' setting. Ask the Owner to open Supabase Dashboard → Authentication → Sign In / Policies → turn OFF 'Secure password change'. This app already verifies your current password.");
+        } else {
+          setError(err.message || "Could not update password. Please try again.");
+        }
+        return;
+      }
       setDone(true);
       logAudit("Password changed", "");
       setPw0(""); setPw1(""); setPw2("");
-      setTimeout(() => { setDone(false); onClose(); }, 1200);
+    } catch (e) {
+      setError(e.message || "Something went wrong. Check your internet connection and try again.");
     } finally {
       setBusy(false);
     }
@@ -48,7 +60,12 @@ export default function ChangePasswordModal({ open, onClose, logAudit, email }) 
   return (
     <Modal open={open} onClose={onClose} title="Change password" width="max-w-sm">
       {done ? (
-        <div className="text-sm flex items-center gap-2" style={{ color: T.emerald }}><CheckCircle2 size={16} /> Password updated.</div>
+        <div className="text-center py-4">
+          <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: T.emeraldWash }}><CheckCircle2 size={24} color={T.emerald} /></div>
+          <div className="text-sm font-semibold mb-1" style={{ color: T.emerald }}>Password changed successfully!</div>
+          <p className="text-xs mb-4" style={{ color: T.inkFaint }}>Use your new password the next time you sign in.</p>
+          <Btn className="mx-auto" onClick={onClose}>Done</Btn>
+        </div>
       ) : (
         <div className="space-y-3">
           <Field label="Current password" required><Input type="password" value={pw0} onChange={(e) => setPw0(e.target.value)} autoComplete="current-password" /></Field>

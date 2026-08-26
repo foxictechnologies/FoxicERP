@@ -65,7 +65,17 @@ export default function PurchasesModule({ ctx }) {
                   <td className="px-4 py-2.5 font-medium" style={{ color: T.navy }}>{p.number}{p.attachmentUrl && <Paperclip size={11} className="inline ml-1" style={{ color: T.inkFaint }} />}</td>
                   <td className="px-4 py-2.5" style={{ color: T.inkSoft }}>{fmtDate(p.date)}</td>
                   <td className="px-4 py-2.5">{vendor?.name}</td>
-                  <td className="px-4 py-2.5 text-xs max-w-[240px] truncate" style={{ color: T.inkSoft }} title={p.items.map((it) => `${ctx.getProduct(it.productId)?.name || "Unknown"} × ${it.qty}`).join("\n")}>{p.items.map((it) => `${ctx.getProduct(it.productId)?.name || "Unknown"} × ${it.qty}`).join(", ")}</td>
+                  <td className="px-4 py-2.5 text-xs" style={{ color: T.inkSoft }}>
+                    {p.items.map((it, idx) => {
+                      const prod = ctx.getProduct(it.productId);
+                      return (
+                        <div key={idx} className="flex items-center gap-2 py-0.5">
+                          <span className="font-medium" style={{ color: T.ink }}>{prod?.name || "Unknown"}</span>
+                          <span>{it.qty} {prod?.unit || ""} × {INR2(it.rate)}</span>
+                        </div>
+                      );
+                    })}
+                  </td>
                   <td className="px-4 py-2.5 font-medium">{INR(purchaseTotal(p))}</td>
                   <td className="px-4 py-2.5"><Badge tone={statusTone(p.status)}>{p.status}</Badge></td>
                   <td className="px-4 py-2.5 text-right"><div className="flex justify-end gap-2 items-center"><AttachmentLink path={p.attachmentUrl} label="Proof" />{p.status !== "Paid" && <Btn size="sm" variant="secondary" onClick={() => markPaid(p)}>Mark Paid</Btn>}</div></td>

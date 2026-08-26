@@ -70,8 +70,8 @@ export function Modal({ open, onClose, title, children, width = "max-w-xl" }) {
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8 px-4" style={{ background: "rgba(15,18,26,0.5)" }} onClick={onClose}>
-      <div className={`w-full ${width} rounded-2xl shadow-2xl`} style={{ background: T.surface }} onClick={(e) => e.stopPropagation()}>
+    <div className={`print-modal-overlay fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8 px-4`} style={{ background: "rgba(15,18,26,0.5)" }} onClick={onClose}>
+      <div className={`print-modal-card w-full ${width} rounded-2xl shadow-2xl`} style={{ background: T.surface }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${T.border}` }}>
           <h3 className="font-semibold text-base" style={{ color: T.ink, fontFamily: "Lexend, sans-serif" }}>{title}</h3>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100"><X size={18} color={T.inkSoft} /></button>

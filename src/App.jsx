@@ -100,7 +100,15 @@ export default function App() {
   // ---- 1. session bootstrap: is anyone logged in? ----
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => setSession(sess));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+      // Ignore duplicate events for the SAME user (re-sign-in used by the
+      // change-password verifier, silent token refreshes). Swapping the
+      // session object here would tear down the whole app mid-action.
+      setSession((prev) => {
+        if (prev && sess && prev.user?.id === sess.user?.id) return prev;
+        return sess;
+      });
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 

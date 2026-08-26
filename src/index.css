@@ -6,3 +6,29 @@
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #D6DAE1; border-radius: 8px; }
 table { border-collapse: collapse; }
+
+/* Print: show ONLY the open invoice, laid out flat on A4 */
+@media print {
+  @page { size: A4; margin: 12mm; }
+  body { background: #fff !important; }
+  body * { visibility: hidden !important; }
+  .invoice-print-area, .invoice-print-area * { visibility: visible !important; }
+  .print-modal-overlay {
+    position: absolute !important;
+    inset: 0 !important;
+    background: transparent !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+  .print-modal-card {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  .invoice-print-area { width: 100% !important; }
+  .no-print, .no-print * { display: none !important; }
+}
