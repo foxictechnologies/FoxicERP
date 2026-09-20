@@ -9,13 +9,52 @@
 export const FOXIC_EMAIL = "info@foxic.in";
 
 /**
+ * Safe fetch helper that reads response as text first, checks status,
+ * and handles HTML/non-JSON error pages gracefully without crashing with JSON parse errors.
+ */
+async function safeFetchJson(url, options = {}) {
+  const response = await fetch(url, options);
+  const text = await response.text();
+
+  if (!response.ok) {
+    console.error(`[Hostinger Mail Client] Server response error (${response.status}):`, text);
+    let errorMessage = `Server error (${response.status})`;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed.error || parsed.message) {
+        errorMessage = parsed.error || parsed.message;
+      }
+    } catch {
+      // Strip HTML tags if the server returned an HTML error page (e.g., 404 / 500)
+      const cleanText = text.replace(/<[^>]*>?/gm, "").trim();
+      if (cleanText) {
+        errorMessage = cleanText.length > 120 ? cleanText.slice(0, 120) + "..." : cleanText;
+      }
+    }
+    throw new Error(errorMessage);
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    console.error("[Hostinger Mail Client] Failed to parse JSON response:", text);
+    throw new Error("Invalid response format received from server.");
+  }
+}
+
+/**
  * Fetch real mailbox connection status from Hostinger backend
  */
 export async function getMailStatus() {
   try {
     const res = await fetch("/api/mail/status");
+    const text = await res.text();
     if (!res.ok) return { isConnected: false, accountEmail: FOXIC_EMAIL };
-    return await res.json();
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { isConnected: false, accountEmail: FOXIC_EMAIL };
+    }
   } catch (e) {
     console.warn("[Hostinger Mail Client] Status check failed:", e);
     return { isConnected: false, accountEmail: FOXIC_EMAIL, error: e.message };
@@ -26,12 +65,11 @@ export async function getMailStatus() {
  * Sync real emails from Hostinger Mail API
  */
 export async function syncHostingerEmails() {
-  const res = await fetch("/api/mail/sync", {
+  const data = await safeFetchJson("/api/mail/sync", {
     method: "POST",
     headers: { "Content-Type": "application/json" }
   });
-  const data = await res.json();
-  if (!res.ok || !data.success) {
+  if (!data.success) {
     throw new Error(data.error || "Failed to sync emails from Hostinger Mailbox");
   }
   return data;
@@ -41,13 +79,12 @@ export async function syncHostingerEmails() {
  * Update Hostinger Agentic Mail API Token on backend
  */
 export async function saveMailToken(token) {
-  const res = await fetch("/api/mail/config", {
+  const data = await safeFetchJson("/api/mail/config", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token })
   });
-  const data = await res.json();
-  if (!res.ok || !data.success) {
+  if (!data.success) {
     throw new Error(data.error || "Failed to save Hostinger Mail token");
   }
   return data;
@@ -58,12 +95,11 @@ export async function saveMailToken(token) {
  */
 export async function markEmailReadStatus(folder, uid, isRead) {
   try {
-    const res = await fetch("/api/mail/read", {
+    return await safeFetchJson("/api/mail/read", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ folder: folder || "INBOX", uid, isRead })
     });
-    return await res.json();
   } catch (e) {
     console.warn("[Hostinger Mail Client] Read status update failed:", e);
   }
@@ -74,12 +110,11 @@ export async function markEmailReadStatus(folder, uid, isRead) {
  */
 export async function markEmailStarStatus(folder, uid, isStarred) {
   try {
-    const res = await fetch("/api/mail/star", {
+    return await safeFetchJson("/api/mail/star", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ folder: folder || "INBOX", uid, isStarred })
     });
-    return await res.json();
   } catch (e) {
     console.warn("[Hostinger Mail Client] Star status update failed:", e);
   }
@@ -89,13 +124,12 @@ export async function markEmailStarStatus(folder, uid, isStarred) {
  * Move email to Trash on Hostinger server
  */
 export async function trashEmailMessage(folder, uid) {
-  const res = await fetch("/api/mail/trash", {
+  const data = await safeFetchJson("/api/mail/trash", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ folder: folder || "INBOX", uid })
   });
-  const data = await res.json();
-  if (!res.ok || !data.success) {
+  if (!data.success) {
     throw new Error(data.error || "Failed to move email to trash on Hostinger");
   }
   return data;
@@ -105,13 +139,12 @@ export async function trashEmailMessage(folder, uid) {
  * Permanently Delete email from Hostinger server
  */
 export async function deleteEmailMessage(folder, uid) {
-  const res = await fetch("/api/mail/delete", {
+  const data = await safeFetchJson("/api/mail/delete", {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ folder: folder || "INBOX.Trash", uid })
   });
-  const data = await res.json();
-  if (!res.ok || !data.success) {
+  if (!data.success) {
     throw new Error(data.error || "Failed to permanently delete email on Hostinger");
   }
   return data;
@@ -121,13 +154,12 @@ export async function deleteEmailMessage(folder, uid) {
  * Send an email from info@foxic.in via Hostinger Mail API
  */
 export async function sendEmailMessage({ to, subject, text, html, displayName = "Foxic Admin" }) {
-  const res = await fetch("/api/mail/send", {
+  const data = await safeFetchJson("/api/mail/send", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ to, subject, text, html, displayName })
   });
-  const data = await res.json();
-  if (!res.ok || !data.success) {
+  if (!data.success) {
     throw new Error(data.error || "Failed to send email via Hostinger Mail API");
   }
   return data;
