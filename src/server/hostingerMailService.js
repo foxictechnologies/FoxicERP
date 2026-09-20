@@ -36,12 +36,11 @@ export function sanitizeEmails(input) {
   return cleaned;
 }
 
-// Helper: Get token from env or config file
+// Helper: Get token from env or config file. Keep secrets server-side only.
 export function getHostingerToken() {
-  let token = process.env.HOSTINGER_MAIL_API_TOKEN || "";
-  
-  // Check .hostinger_mail.json
-  if (!token && fs.existsSync(CONFIG_FILE)) {
+  let token = process.env.HOSTINGER_MAIL_API_TOKEN || process.env.VITE_HOSTINGER_MAIL_API_TOKEN || "";
+
+  if (!token && !process.env.VERCEL && fs.existsSync(CONFIG_FILE)) {
     try {
       const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
       if (cfg.token) token = cfg.token;
@@ -50,8 +49,7 @@ export function getHostingerToken() {
     }
   }
 
-  // Check .env file directly
-  if (!token) {
+  if (!token && !process.env.VERCEL) {
     const envPath = path.resolve(process.cwd(), ".env");
     if (fs.existsSync(envPath)) {
       try {
@@ -66,18 +64,24 @@ export function getHostingerToken() {
     }
   }
 
-  return token.trim();
+  return String(token || "").trim();
 }
 
-// Helper: Save token to config file
+// Helper: Save token to config file (local dev only).
 export function saveHostingerToken(token) {
   try {
     const cleanToken = String(token || "").trim();
     if (!cleanToken) {
       throw new Error("Hostinger Mail API token is required.");
     }
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify({ token: cleanToken, updatedAt: new Date().toISOString() }, null, 2), "utf8");
+
     process.env.HOSTINGER_MAIL_API_TOKEN = cleanToken;
+    process.env.VITE_HOSTINGER_MAIL_API_TOKEN = cleanToken;
+
+    if (!process.env.VERCEL) {
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify({ token: cleanToken, updatedAt: new Date().toISOString() }, null, 2), "utf8");
+    }
+
     return true;
   } catch (e) {
     console.error("[Hostinger Mail Backend] Failed to save token:", e);
