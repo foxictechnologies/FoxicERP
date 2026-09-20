@@ -18,40 +18,200 @@
  */
 
 import {
-  LayoutDashboard, FileText, Package, Users, Truck, CreditCard, Receipt,
-  ShoppingCart, BarChart3, Settings as SettingsIcon, UserCog, CalendarRange
+  LayoutDashboard,
+  FileText,
+  Package,
+  Users,
+  Truck,
+  CreditCard,
+  Receipt,
+  ShoppingCart,
+  BarChart3,
+  Settings as SettingsIcon,
+  UserCog,
+  CalendarRange,
+  Inbox,
+  CheckSquare,
+  Mail
 } from "lucide-react";
 
 export const T = {
-  ink: "#12161F", inkSoft: "#5B6472", inkFaint: "#8B93A1",
-  bg: "#F5F6F8", surface: "#FFFFFF", border: "#E4E7EC", borderSoft: "#EEF0F3",
-  navy: "#1D2B53", navyWash: "#EBEEF6",
-  emerald: "#0F9D6D", emeraldWash: "#E4F6EF",
-  amber: "#C4770A", amberWash: "#FBF0DD",
-  red: "#C13B3B", redWash: "#FBEAEA",
+  // ─────────────────────────────────────────
+  // Core typography
+  // ─────────────────────────────────────────
+
+  ink: "#1D1D1F",
+  inkSoft: "#6E6E73",
+  inkFaint: "#86868B",
+
+  // ─────────────────────────────────────────
+  // Surfaces
+  // ─────────────────────────────────────────
+
+  bg: "#F5F5F7",
+  surface: "#FFFFFF",
+
+  border: "rgba(0, 0, 0, 0.08)",
+  borderSoft: "rgba(0, 0, 0, 0.05)",
+
+  // ─────────────────────────────────────────
+  // Primary accent
+  // Apple-inspired blue
+  // ─────────────────────────────────────────
+
+  navy: "#0071E3",
+  navyWash: "#EAF3FF",
+
+  // ─────────────────────────────────────────
+  // Success
+  // ─────────────────────────────────────────
+
+  emerald: "#248A3D",
+  emeraldWash: "#EAF6ED",
+
+  // ─────────────────────────────────────────
+  // Warning
+  // ─────────────────────────────────────────
+
+  amber: "#B06D00",
+  amberWash: "#FFF4DF",
+
+  // ─────────────────────────────────────────
+  // Danger
+  // ─────────────────────────────────────────
+
+  red: "#D70015",
+  redWash: "#FFF0F1",
 };
 
-export const PIE_COLORS = ["#1D2B53", "#0F9D6D", "#C4770A", "#6B4CA6", "#C13B3B", "#2E7D9A"];
 
-export const INDIAN_STATES = ["Maharashtra", "Karnataka", "Delhi", "Gujarat", "Tamil Nadu", "Telangana",
-  "West Bengal", "Uttar Pradesh", "Rajasthan", "Haryana", "Punjab", "Kerala"];
+// Chart palette
+export const PIE_COLORS = [
+  "#0071E3",
+  "#34C759",
+  "#FF9F0A",
+  "#AF52DE",
+  "#FF375F",
+  "#5E5CE6",
+];
+
+export const INDIAN_STATES = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
+  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand",
+  "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur",
+  "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab",
+  "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura",
+  "Uttar Pradesh", "Uttarakhand", "West Bengal",
+  "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu",
+  "Delhi", "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry"
+];
 
 export const EXPENSE_CATEGORIES = ["Rent", "Electricity", "Internet", "Transport", "Salary", "Marketing", "Office Expenses", "Maintenance", "Travel", "Software", "Professional Fees", "Bank Charges", "Miscellaneous"];
 
-export const DATE_RANGE_OPTIONS = ["Today", "This week", "This month", "Last month", "This quarter", "This year", "All time", "Custom"];
+export const DATE_RANGE_OPTIONS = [
+  "Today",
+  "Yesterday",
+  "This week",
+  "Last 7 days",
+  "This month",
+  "Last month",
+  "Last 30 days",
+  "This quarter",
+  "Last quarter",
+  "This year",
+  "FY 2024-25",
+  "FY 2025-26",
+  "All time",
+  "Custom"
+];
 
 // Which sidebar tabs each role can see. "*" = all tabs (Owner only).
 // This is a UI convenience, NOT the security boundary — see the note above.
 export const ROLES = {
-  Owner: { label: "Business Owner", tabs: "*" },
-  Accountant: { label: "Accountant", tabs: ["dashboard", "sales", "purchases", "payments", "expenses", "reports", "analytics", "settings"] },
-  Sales: { label: "Sales Employee", tabs: ["dashboard", "sales", "customers", "analytics"] },
-  Inventory: { label: "Inventory Manager", tabs: ["dashboard", "inventory"] },
+  Owner: {
+    label: "Business Owner",
+    tabs: "*"
+  },
+
+  Accountant: {
+    label: "Accountant",
+    tabs: [
+      "dashboard",
+      "sales",
+      "purchases",
+      "payments",
+      "expenses",
+      "reports",
+      "analytics",
+      "tasks"
+    ]
+  },
+
+  Manager: {
+    label: "Operations Manager",
+    tabs: [
+      "dashboard",
+      "inbox",
+      "sales",
+      "purchases",
+      "inventory",
+      "customers",
+      "vendors",
+      "payments",
+      "expenses",
+      "users",
+      "tickets",
+      "tasks"
+    ]
+  },
+
+  Sales: {
+    label: "Sales Employee",
+    tabs: [
+      "dashboard",
+      "sales",
+      "customers",
+      "analytics",
+      "tasks"
+    ]
+  },
+
+  Inventory: {
+    label: "Inventory Manager",
+    tabs: [
+      "dashboard",
+      "purchases",
+      "inventory",
+      "vendors",
+      "tasks"
+    ]
+  },
+
+  Viewer: {
+    label: "Viewer (Read Only)",
+    tabs: [
+      "dashboard",
+      "inbox",
+      "sales",
+      "purchases",
+      "inventory",
+      "customers",
+      "vendors",
+      "payments",
+      "expenses",
+      "reports",
+      "analytics",
+      "users",
+      "tickets",
+      "tasks"
+    ]
+  },
 };
 
 // The sidebar's full list of pages. Order here = order shown in the sidebar.
 export const NAV = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "inbox", label: "Email / Inbox", icon: Mail },
   { id: "sales", label: "Sales & Invoices", icon: FileText },
   { id: "purchases", label: "Purchases", icon: ShoppingCart },
   { id: "inventory", label: "Inventory", icon: Package },
@@ -60,7 +220,17 @@ export const NAV = [
   { id: "payments", label: "Payments", icon: CreditCard },
   { id: "expenses", label: "Expenses", icon: Receipt },
   { id: "reports", label: "Reports", icon: BarChart3 },
-  { id: "analytics", label: "Date-wise Analytics", icon: CalendarRange },
+  { id: "analytics", label: "Business Analytics", icon: CalendarRange },
   { id: "settings", label: "Settings", icon: SettingsIcon },
   { id: "users", label: "Users & Access Log", icon: UserCog },
+  {
+    id: "tickets",
+    label: "Enquiries & Tickets",
+    icon: Inbox
+  },
+  {
+    id: "tasks",
+    label: "Tasks & To-Dos",
+    icon: CheckSquare
+  },
 ];

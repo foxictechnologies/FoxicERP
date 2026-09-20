@@ -2,4 +2,8 @@ node_modules
 dist
 .env
 .env.local
+.env.*
+.gmail_tokens.json
+.gmail_config.json
+.hostinger_mail.json
 *.zip

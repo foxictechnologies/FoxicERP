@@ -10,11 +10,12 @@
 
 import React, { useState } from "react";
 import {
-  Building2, Lock, Eye, EyeOff, Mail, AlertCircle, Loader2,
+  Lock, Eye, EyeOff, Mail, AlertCircle, Loader2,
   ReceiptText, Boxes, Wallet, BarChart3, ShieldCheck, ArrowRight
 } from "lucide-react";
 import { T } from "../lib/constants";
 import { supabase } from "../supabaseClient";
+import foxicLogo from "../assets/foxic-logo.png";
 
 const FEATURES = [
   { icon: ReceiptText, title: "GST-ready invoicing", sub: "CGST, SGST & IGST handled automatically" },
@@ -60,11 +61,13 @@ export default function LoginScreen({ onLoggedIn }) {
         <div aria-hidden="true" className="absolute pointer-events-none rounded-full" style={{ width: 420, height: 420, top: -140, right: -120, background: "radial-gradient(circle, rgba(96,140,255,0.28) 0%, rgba(96,140,255,0) 70%)" }} />
         <div aria-hidden="true" className="absolute pointer-events-none rounded-full" style={{ width: 360, height: 360, bottom: -120, left: -100, background: "radial-gradient(circle, rgba(15,157,109,0.22) 0%, rgba(15,157,109,0) 70%)" }} />
 
-        <div className="relative flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)" }}><Building2 size={20} color="#fff" /></div>
+        <div className="relative flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl overflow-hidden flex items-center justify-center shrink-0 bg-black shadow-md border border-white/20">
+            <img src={foxicLogo} alt="Foxic Logo" className="w-full h-full object-cover" />
+          </div>
           <div>
-            <div className="text-white font-semibold text-base leading-tight" style={{ fontFamily: "Lexend, sans-serif" }}>Business ERP</div>
-            <div className="text-[11px]" style={{ color: "rgba(255,255,255,0.55)" }}>Built for Indian businesses</div>
+            <div className="text-white font-semibold text-base leading-tight" style={{ fontFamily: "Lexend, sans-serif" }}>Foxic ERP</div>
+            <div className="text-[11px]" style={{ color: "rgba(255,255,255,0.65)" }}>Business Intelligence &amp; Operations</div>
           </div>
         </div>
 
@@ -103,8 +106,10 @@ export default function LoginScreen({ onLoggedIn }) {
         <div className="w-full max-w-[400px]">
           {/* compact brand for mobile / tablet */}
           <div className="lg:hidden flex flex-col items-center mb-8">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-3" style={{ background: T.navy }}><Building2 size={20} color="#fff" /></div>
-            <div className="font-semibold text-lg" style={{ color: T.ink, fontFamily: "Lexend, sans-serif" }}>Business ERP</div>
+            <div className="w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center mb-3 bg-black shadow-md">
+              <img src={foxicLogo} alt="Foxic Logo" className="w-full h-full object-cover" />
+            </div>
+            <div className="font-semibold text-lg" style={{ color: T.ink, fontFamily: "Lexend, sans-serif" }}>Foxic ERP</div>
             <div className="text-xs mt-0.5" style={{ color: T.inkFaint }}>Sign in to your business account</div>
           </div>
 

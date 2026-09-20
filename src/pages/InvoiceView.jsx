@@ -85,7 +85,7 @@ export default function InvoiceView({ inv, onClose, ctx }) {
       </div>
       <div className="text-xs mb-4" style={{ color: T.inkFaint }}>Amount in words: {numToWordsIndian(totals.grandTotal)}</div>
       <div className="grid grid-cols-2 gap-4 text-xs mb-4">
-        <div><div className="font-medium mb-1" style={{ color: T.inkSoft }}>BANK DETAILS</div><div style={{ color: T.inkFaint }}>{ctx.company.bankName}</div><div style={{ color: T.inkFaint }}>A/C {ctx.company.bankAccount}</div><div style={{ color: T.inkFaint }}>IFSC {ctx.company.bankIfsc}</div></div>
+        <div><div className="font-medium mb-1" style={{ color: T.inkSoft }}>BANK DETAILS</div><div style={{ color: T.inkFaint }}>{ctx.company.bankName}</div><div style={{ color: T.inkFaint }}>A/C <span className="font-semibold" style={{ color: T.ink }}>{ctx.company.bankAccount}</span></div>{ctx.company.bankIfsc && <div style={{ color: T.inkFaint }}>IFSC <span className="font-semibold" style={{ color: T.ink }}>{ctx.company.bankIfsc}</span></div>}</div>
         <div><div className="font-medium mb-1" style={{ color: T.inkSoft }}>TERMS</div><div style={{ color: T.inkFaint }}>{ctx.company.termsAndConditions}</div></div>
       </div>
       {ctx.company.upiId && bal > 0 && (

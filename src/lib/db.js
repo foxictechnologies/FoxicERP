@@ -7,7 +7,7 @@ const TABLE_COLUMNS = {
   companies: ["id","name","legalName","ownerName","address","city","state","pin","phone","email","gstin","pan","bankName","bankAccount","bankIfsc","upiId","invoicePrefix","nextInvoiceNumber","purchasePrefix","nextPurchaseNumber","financialYear","defaultGstRate","paymentTerms","termsAndConditions"],
   products: ["id","companyId","name","sku","hsn","category","unit","purchasePrice","sellingPrice","mrp","gstRate","currentStock","reorderLevel"],
   customers: ["id","companyId","name","contact","phone","email","gstin","state","address","pin","creditLimit","paymentTerms"],
-  vendors: ["id","companyId","name","contact","phone","email","gstin","state","address","bankName","bankAccount","paymentTerms"],
+  vendors: ["id","companyId","name","contact","phone","email","gstin","state","address","bankName","bankAccount","bankIfsc","paymentTerms"],
   invoices: ["id","companyId","number","date","customerId","dueDate","status","items","paidAmount","createdBy","attachmentUrl","taxType"],
   purchases: ["id","companyId","number","date","vendorId","status","items","createdBy","attachmentUrl"],
   payments: ["id","companyId","date","type","partyId","refId","refNumber","amount","method","notes","createdBy","attachmentUrl"],
@@ -15,16 +15,118 @@ const TABLE_COLUMNS = {
   stock_ledger: ["id","companyId","productId","date","type","qty","refId"],
   audit_log: ["id","companyId","userId","userName","role","action","details","timestamp"],
   profiles: ["id","companyId","name","role","status"],
+  tickets: [
+
+    "id",
+  
+    "companyId",
+  
+    "ticketNumber",
+  
+    "name",
+  
+    "email",
+  
+    "phone",
+  
+    "subject",
+  
+    "message",
+  
+    "source",
+  
+    "status",
+  
+    "priority",
+  
+    "assignedTo",
+    "attachment",
+    "createdAt",
+    "updatedAt"
+  ],
+  tasks: [
+    "id",
+    "companyId",
+    "title",
+    "description",
+    "status",
+    "priority",
+    "category",
+    "assignedTo",
+    "createdBy",
+    "updatedBy",
+    "updatedById",
+    "updatedByRole",
+    "dueDate",
+    "attachment",
+    "createdAt",
+    "updatedAt"
+  ],
+  emails: [
+    "id",
+    "companyId",
+    "accountEmail",
+    "messageId",
+    "threadId",
+    "senderName",
+    "senderEmail",
+    "recipientEmail",
+    "subject",
+    "snippet",
+    "bodyHtml",
+    "bodyText",
+    "isRead",
+    "isStarred",
+    "folder",
+    "category",
+    "attachments",
+    "receivedAt",
+    "createdAt",
+    "updatedAt"
+  ],
+  email_integrations: [
+    "id",
+    "companyId",
+    "accountEmail",
+    "provider",
+    "clientId",
+    "accessToken",
+    "refreshToken",
+    "tokenExpiry",
+    "syncStatus",
+    "lastSyncedAt",
+    "createdAt",
+    "updatedAt"
+  ],
 };
 
 const toSnake = (s) => s.replace(/[A-Z]/g, (m) => "_" + m.toLowerCase());
 const toCamel = (s) => s.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
 
+const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+const isUuid = (v) => typeof v === "string" && UUID_REGEX.test(v);
+
 function toDb(table, obj) {
   const allowed = TABLE_COLUMNS[table] || Object.keys(obj);
   const out = {};
+  const uuidColumns = ["id", "company_id", "assigned_to", "created_by", "updated_by_id", "customer_id", "vendor_id", "product_id", "user_id", "ref_id", "party_id"];
   allowed.forEach((camelKey) => {
-    if (obj[camelKey] !== undefined) out[toSnake(camelKey)] = obj[camelKey];
+    if (obj[camelKey] !== undefined) {
+      const snakeKey = toSnake(camelKey);
+      const val = obj[camelKey];
+
+      if (uuidColumns.includes(snakeKey)) {
+        if (snakeKey === "id") {
+          if (isUuid(val)) {
+            out[snakeKey] = val;
+          }
+        } else {
+          out[snakeKey] = isUuid(val) ? val : null;
+        }
+      } else {
+        out[snakeKey] = val;
+      }
+    }
   });
   return out;
 }
@@ -38,8 +140,23 @@ function fromDb(row) {
 
 /** Fetch every row of a table (Row-Level Security already scopes this to the caller's company). */
 export async function fetchTable(table, orderCol = "created_at", ascending = false) {
-  const { data, error } = await supabase.from(table).select("*").order(orderCol, { ascending });
-  if (error) { console.error(`fetchTable(${table})`, error); return []; }
+  let query = supabase.from(table).select("*");
+  if (orderCol) {
+    query = query.order(orderCol, { ascending });
+  }
+  let { data, error } = await query;
+  if (error && orderCol) {
+    console.warn(`fetchTable(${table}) order by "${orderCol}" failed, retrying without order...`, error.message);
+    const retry = await supabase.from(table).select("*");
+    if (!retry.error) {
+      data = retry.data;
+      error = null;
+    }
+  }
+  if (error) {
+    console.error(`fetchTable(${table}) failed:`, error.message || error);
+    return [];
+  }
   return (data || []).map(fromDb);
 }
 

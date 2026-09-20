@@ -20,6 +20,7 @@ import { Save } from "lucide-react";
 
 export default function PaymentsModule({ ctx }) {
   const { payments, setPayments, invoices, setInvoices, customers } = ctx;
+  const isViewer = ctx.role === "Viewer";
   const [showForm, setShowForm] = useState(false);
   const [file, setFile] = useState(null);
   const openInvoices = invoices.filter((i) => i.status === "Sent" || i.status === "Partially Paid" || i.status === "Overdue");
@@ -51,7 +52,7 @@ export default function PaymentsModule({ ctx }) {
 
   return (
     <div>
-      <SectionHeader title="Payments" subtitle="Record and track receipts and payments" action={<Btn icon={Plus} onClick={() => { setForm(blank()); setShowForm(true); }} disabled={openInvoices.length === 0}>Record Payment</Btn>} />
+      <SectionHeader title="Payments" subtitle="Record and track receipts and payments" action={!isViewer ? <Btn icon={Plus} onClick={() => { setForm(blank()); setShowForm(true); }} disabled={openInvoices.length === 0}>Record Payment</Btn> : null} />
       <Card>
         {payments.length === 0 ? <EmptyState icon={CreditCard} title="No payments recorded" /> : (
           <div className="overflow-x-auto">

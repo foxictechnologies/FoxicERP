@@ -18,6 +18,7 @@ import { insertRow, deleteRow, uploadAttachment } from "../lib/db";
 
 export default function ExpensesModule({ ctx }) {
   const { expenses, setExpenses } = ctx;
+  const isViewer = ctx.role === "Viewer";
   const [showForm, setShowForm] = useState(false);
   const [file, setFile] = useState(null);
   const blank = () => ({ id: uid(), date: todayISO(), category: EXPENSE_CATEGORIES[0], amount: 0, vendor: "", method: "Cash", description: "" });
@@ -46,12 +47,12 @@ export default function ExpensesModule({ ctx }) {
 
   return (
     <div>
-      <SectionHeader title="Expenses" subtitle={`Total recorded: ${INR(total)}`} action={<Btn icon={Plus} onClick={() => { setForm(blank()); setShowForm(true); }}>New Expense</Btn>} />
+      <SectionHeader title="Expenses" subtitle={`Total recorded: ${INR(total)}`} action={!isViewer ? <Btn icon={Plus} onClick={() => { setForm(blank()); setShowForm(true); }}>New Expense</Btn> : null} />
       <Card>
         {expenses.length === 0 ? <EmptyState icon={Receipt} title="No expenses recorded" /> : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>{["Date", "Category", "Description", "Vendor", "Method", "Amount", "Proof", ""].map((h) => <th key={h} className="text-left px-4 py-2.5 text-xs font-medium" style={{ color: T.inkFaint }}>{h}</th>)}</tr></thead>
+              <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>{["Date", "Category", "Description", "Vendor", "Method", "Amount", "Proof", !isViewer ? "" : null].filter(Boolean).map((h) => <th key={h} className="text-left px-4 py-2.5 text-xs font-medium" style={{ color: T.inkFaint }}>{h}</th>)}</tr></thead>
               <tbody>{expenses.map((e) => (
                 <tr key={e.id} style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
                   <td className="px-4 py-2.5" style={{ color: T.inkSoft }}>{fmtDate(e.date)}</td>
@@ -61,7 +62,9 @@ export default function ExpensesModule({ ctx }) {
                   <td className="px-4 py-2.5" style={{ color: T.inkFaint }}>{e.method}</td>
                   <td className="px-4 py-2.5 font-medium">{INR(e.amount)}</td>
                   <td className="px-4 py-2.5"><AttachmentLink path={e.attachmentUrl} label="Proof" /></td>
-                  <td className="px-4 py-2.5 text-right"><button onClick={() => remove(e.id)} className="p-1.5 rounded-md hover:bg-gray-100"><Trash2 size={14} color={T.red} /></button></td>
+                  {!isViewer && (
+                    <td className="px-4 py-2.5 text-right"><button onClick={() => remove(e.id)} className="p-1.5 rounded-md hover:bg-gray-100"><Trash2 size={14} color={T.red} /></button></td>
+                  )}
                 </tr>))}</tbody>
             </table>
           </div>

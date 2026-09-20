@@ -2,17 +2,358 @@
 @tailwind components;
 @tailwind utilities;
 
-* { box-sizing: border-box; }
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: #D6DAE1; border-radius: 8px; }
-table { border-collapse: collapse; }
+/* =========================================================
+   APPLE-STYLE GLOBAL FOUNDATION
+   ========================================================= */
 
-/* Print: show ONLY the open invoice, laid out flat on A4 */
+:root {
+  color-scheme: light;
+
+  --app-bg: #f5f5f7;
+  --app-surface: #ffffff;
+  --app-surface-soft: rgba(255, 255, 255, 0.72);
+
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #86868b;
+
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.12);
+
+  --accent: #0071e3;
+  --accent-hover: #0077ed;
+
+  --success: #248a3d;
+  --warning: #b06d00;
+  --danger: #d70015;
+
+  --shadow-xs:
+    0 1px 2px rgba(0, 0, 0, 0.04);
+
+  --shadow-sm:
+    0 2px 8px rgba(0, 0, 0, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.03);
+
+  --shadow-md:
+    0 8px 30px rgba(0, 0, 0, 0.07),
+    0 2px 8px rgba(0, 0, 0, 0.04);
+
+  --shadow-lg:
+    0 20px 60px rgba(0, 0, 0, 0.10),
+    0 4px 16px rgba(0, 0, 0, 0.05);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+
+  --ease-apple: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+
+/* =========================================================
+   BASE
+   ========================================================= */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--app-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+
+  background:
+    radial-gradient(circle at 80% -10%,
+      rgba(255, 255, 255, 0.95),
+      transparent 38%),
+    var(--app-bg);
+
+  color: var(--text-primary);
+
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Display",
+    "SF Pro Text",
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+
+  font-size: 14px;
+  line-height: 1.5;
+
+  letter-spacing: -0.01em;
+}
+
+
+/* =========================================================
+   TEXT
+   ========================================================= */
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin-top: 0;
+  color: var(--text-primary);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+
+/* =========================================================
+   SELECTION
+   ========================================================= */
+
+::selection {
+  background: rgba(0, 113, 227, 0.18);
+  color: var(--text-primary);
+}
+
+
+/* =========================================================
+   SCROLLBAR
+   ========================================================= */
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.16);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+
+/* =========================================================
+   TABLES
+   ========================================================= */
+
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+th {
+  font-weight: 500;
+}
+
+
+/* =========================================================
+   FORM ELEMENTS
+   ========================================================= */
+
+input,
+textarea,
+select {
+  outline: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: rgba(0, 113, 227, 0.5);
+}
+
+
+/* =========================================================
+   INTERACTION
+   ========================================================= */
+
+button,
+a,
+[role="button"] {
+  transition:
+    transform 180ms var(--ease-apple),
+    opacity 180ms var(--ease-smooth),
+    background-color 180ms var(--ease-smooth),
+    border-color 180ms var(--ease-smooth),
+    box-shadow 220ms var(--ease-apple),
+    color 180ms var(--ease-smooth);
+}
+
+button:active,
+[role="button"]:active {
+  transform: scale(0.985);
+}
+
+
+/* =========================================================
+   PREMIUM SURFACE
+   Use .apple-surface on major containers.
+   ========================================================= */
+
+.apple-surface {
+  background: var(--app-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+
+/* =========================================================
+   GLASS SURFACE
+   Use selectively — NOT everywhere.
+   ========================================================= */
+
+.apple-glass {
+  background: var(--app-surface-soft);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: var(--shadow-md);
+
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+}
+
+
+/* =========================================================
+   SUBTLE HOVER LIFT
+   ========================================================= */
+
+.apple-lift {
+  transition:
+    transform 240ms var(--ease-apple),
+    box-shadow 240ms var(--ease-apple),
+    border-color 180ms ease;
+}
+
+.apple-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+}
+
+
+/* =========================================================
+   FADE / ENTER ANIMATION
+   ========================================================= */
+
+@keyframes apple-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.apple-enter {
+  animation:
+    apple-fade-up 500ms var(--ease-apple) both;
+}
+
+
+/* =========================================================
+   SOFT PULSE
+   For live indicators / syncing states.
+   ========================================================= */
+
+@keyframes apple-pulse {
+
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.92);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.apple-pulse {
+  animation: apple-pulse 2s ease-in-out infinite;
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   Accessibility + performance.
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+
+/* =========================================================
+   PRINT
+   Show ONLY the open invoice on A4.
+   ========================================================= */
+
 @media print {
-  @page { size: A4; margin: 12mm; }
-  body { background: #fff !important; }
-  body * { visibility: hidden !important; }
-  .invoice-print-area, .invoice-print-area * { visibility: visible !important; }
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .invoice-print-area,
+  .invoice-print-area * {
+    visibility: visible !important;
+  }
+
   .print-modal-overlay {
     position: absolute !important;
     inset: 0 !important;
@@ -21,6 +362,7 @@ table { border-collapse: collapse; }
     overflow: visible !important;
     display: block !important;
   }
+
   .print-modal-card {
     max-width: none !important;
     width: 100% !important;
@@ -29,6 +371,51 @@ table { border-collapse: collapse; }
     border: none !important;
     box-shadow: none !important;
   }
-  .invoice-print-area { width: 100% !important; }
-  .no-print, .no-print * { display: none !important; }
+
+  .invoice-print-area {
+    width: 100% !important;
+  }
+
+  .no-print,
+  .no-print * {
+    display: none !important;
+  }
+}
+
+@keyframes inputShake {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  20%,
+  60% {
+    transform: translateX(-4px);
+  }
+
+  40%,
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+.animate-shake {
+  animation: inputShake 0.35s ease-in-out;
+}
+
+@keyframes inputFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: inputFadeIn 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }

@@ -22,7 +22,8 @@
 import React, { useState, useMemo } from "react";
 import {
   TrendingUp, TrendingDown, IndianRupee, ShoppingCart, Wallet, Receipt,
-  Boxes, AlertTriangle, Users, Truck, CheckCircle2, Lock
+  Boxes, AlertTriangle, Users, Truck, CheckCircle2, Lock, Mail, ArrowRight,
+  Sparkles
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, Line,
@@ -32,12 +33,20 @@ import { T, PIE_COLORS, DATE_RANGE_OPTIONS } from "../lib/constants";
 import { INR, todayISO } from "../lib/format";
 import { getRangeDates, inRange } from "../lib/dateRange";
 import { Card, Badge, Btn, Select, EmptyState, KpiCard, SectionHeader, CustomTooltip } from "../components/ui";
+import { FOXIC_EMAIL } from "../lib/hostingerMail";
 
 export default function Dashboard({ ctx }) {
-  const { invoices, purchases, expenses, products, customers, vendors, invoiceTotals, invoiceBalance, role } = ctx;
-  const canSeeFinance = role === "Owner" || role === "Accountant";
-  const canSeeSales = role === "Owner" || role === "Accountant" || role === "Sales";
-  const canSeeInventory = role === "Owner" || role === "Inventory";
+  const { invoices, purchases, expenses, products, customers, vendors, invoiceTotals, invoiceBalance, role, emails = [], setActiveTab } = ctx;
+
+  const unreadEmails = useMemo(() => {
+    return (emails || []).filter(e => !e.is_read && e.folder !== "trash");
+  }, [emails]);
+
+  const latestEmail = unreadEmails.length > 0 ? unreadEmails[0] : (emails && emails.length > 0 ? emails[0] : null);
+  const canSeeFinance = role === "Owner" || role === "Accountant" || role === "Manager";
+  const canSeeProfits = role === "Owner" || role === "Accountant";
+  const canSeeSales = role === "Owner" || role === "Accountant" || role === "Sales" || role === "Manager" || role === "Viewer";
+  const canSeeInventory = role === "Owner" || role === "Inventory" || role === "Manager" || role === "Viewer";
   const [rangeLabel, setRangeLabel] = useState("This month");
   const range = useMemo(() => getRangeDates(rangeLabel), [rangeLabel]);
 
@@ -82,6 +91,31 @@ export default function Dashboard({ ctx }) {
   });
   const agingData = Object.entries(agingBuckets).map(([name, value]) => ({ name, value }));
 
+  const ownerPendingCount = useMemo(() => {
+    if (!ctx.company?.id) return 0;
+    const compId = ctx.company.id;
+    let count = 0;
+    try {
+      const rawUsers = localStorage.getItem(`erp_pending_user_requests_${compId}`);
+      const pUsers = rawUsers ? JSON.parse(rawUsers) : [];
+      if (Array.isArray(pUsers)) count += pUsers.length;
+    } catch (e) {}
+
+    try {
+      const rawRoles = localStorage.getItem(`erp_pending_role_requests_${compId}`);
+      const pRoles = rawRoles ? JSON.parse(rawRoles) : {};
+      count += Object.keys(pRoles).length;
+    } catch (e) {}
+
+    try {
+      const rawActions = localStorage.getItem(`erp_pending_member_actions_${compId}`);
+      const pActions = rawActions ? JSON.parse(rawActions) : {};
+      count += Object.keys(pActions).length;
+    } catch (e) {}
+
+    return count;
+  }, [ctx.company?.id]);
+
   const noDataYet = products.length === 0 && customers.length === 0 && invoices.length === 0;
 
   return (
@@ -99,6 +133,160 @@ export default function Dashboard({ ctx }) {
         </Card>
       )}
 
+      {/* ── OWNER ACTION REQUIRED NOTIFICATION CARD ── */}
+      {role === "Owner" && ownerPendingCount > 0 && (
+        <div
+          onClick={() => setActiveTab && setActiveTab("users")}
+          style={{
+            marginBottom: 16,
+            padding: "14px 18px",
+            borderRadius: 14,
+            background: "linear-gradient(135deg, #FFF9E6 0%, #FFFFFF 100%)",
+            border: "1px solid rgba(176, 109, 0, 0.30)",
+            boxShadow: "0 4px 16px rgba(176, 109, 0, 0.10)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 12,
+            cursor: "pointer",
+            transition: "all 0.2s ease"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 260, flex: 1 }}>
+            <div style={{
+              width: 42,
+              height: 42,
+              borderRadius: 12,
+              background: "linear-gradient(135deg, #B06D00 0%, #FF9F0A 100%)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#fff",
+              boxShadow: "0 3px 10px rgba(176, 109, 0, 0.3)"
+            }}>
+              <ShieldAlert size={20} />
+            </div>
+
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>
+                  Pending Approval Request{ownerPendingCount > 1 ? "s" : ""}
+                </span>
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: "1px 8px",
+                  borderRadius: 12,
+                  background: T.amberWash,
+                  color: T.amber,
+                  border: "1px solid rgba(176,109,0,0.2)"
+                }}>
+                  {ownerPendingCount} Action Required
+                </span>
+              </div>
+              <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 3 }}>
+                You have manager or team member requests (New User, Role Change, or Deactivate/Delete) waiting for your approval.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 6, color: T.amber, fontWeight: 600, fontSize: 13 }}>
+            <span>Review Requests</span>
+            <ArrowRight size={16} />
+          </div>
+        </div>
+      )}
+
+      {/* ── NEW EMAIL RECEIVED NOTIFICATION CARD ── */}
+      {unreadEmails.length > 0 && (
+        <div
+          onClick={() => setActiveTab && setActiveTab("inbox")}
+          style={{
+            marginBottom: 16,
+            padding: "14px 18px",
+            borderRadius: 14,
+            background: "linear-gradient(135deg, #F0F6FF 0%, #FFFFFF 100%)",
+            border: "1px solid rgba(0, 113, 227, 0.22)",
+            boxShadow: "0 4px 16px rgba(0, 113, 227, 0.08)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 12,
+            cursor: "pointer",
+            transition: "all 0.2s ease"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 260, flex: 1 }}>
+            <div style={{
+              position: "relative",
+              width: 42,
+              height: 42,
+              borderRadius: 12,
+              background: "linear-gradient(135deg, #0071E3 0%, #3a98ff 100%)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#fff",
+              boxShadow: "0 3px 10px rgba(0, 113, 227, 0.3)"
+            }}>
+              <Mail size={20} />
+              <span style={{
+                position: "absolute",
+                top: -2,
+                right: -2,
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                background: "#FF3B30",
+                border: "2px solid #fff"
+              }} />
+            </div>
+
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>
+                  New Email Received
+                </span>
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: "1px 8px",
+                  borderRadius: 12,
+                  background: T.navyWash,
+                  color: T.navy,
+                  border: "1px solid rgba(0,113,227,0.18)"
+                }}>
+                  {FOXIC_EMAIL}
+                </span>
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: "1px 8px",
+                  borderRadius: 12,
+                  background: T.redWash,
+                  color: T.red
+                }}>
+                  {unreadEmails.length} unread
+                </span>
+              </div>
+
+              {latestEmail && (
+                <div style={{ fontSize: 12, color: T.inkSoft, marginTop: 3 }}>
+                  <b style={{ color: T.ink }}>{latestEmail.sender_name || latestEmail.sender_email}:</b> {latestEmail.subject}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 6, color: T.navy, fontWeight: 600, fontSize: 13 }}>
+            <span>Go to Inbox</span>
+            <ArrowRight size={16} />
+          </div>
+        </div>
+      )}
+
       {!canSeeFinance && (
         <div className="text-xs mb-4 px-3 py-2 rounded-lg inline-flex items-center gap-2" style={{ background: T.navyWash, color: T.navy }}>
           <Lock size={13} /> Showing {role === "Sales" ? "sales" : "inventory"}-scoped data for your role — enforced by the database, not just this screen.
@@ -113,8 +301,8 @@ export default function Dashboard({ ctx }) {
           <KpiCard label="Outstanding Receivables" value={INR(receivables)} icon={Wallet} iconBg={T.amberWash} iconColor={T.amber} />
           {canSeeFinance && <KpiCard label="Outstanding Payables" value={INR(payables)} icon={Wallet} iconBg={T.redWash} iconColor={T.red} />}
           {canSeeFinance && <KpiCard label="Total Expenses" value={INR(totalExpenses)} icon={Receipt} iconBg={T.redWash} iconColor={T.red} />}
-          {canSeeFinance && <KpiCard label="Gross Profit" value={INR(grossProfit)} deltaTone={grossProfit >= 0 ? "up" : "down"} delta={grossProfit >= 0 ? "Healthy margin" : "Negative"} icon={TrendingUp} iconBg={T.emeraldWash} iconColor={T.emerald} />}
-          {canSeeFinance && <KpiCard label="Net Profit" value={INR(netProfit)} deltaTone={netProfit >= 0 ? "up" : "down"} icon={netProfit >= 0 ? TrendingUp : TrendingDown} iconBg={netProfit >= 0 ? T.emeraldWash : T.redWash} iconColor={netProfit >= 0 ? T.emerald : T.red} />}
+          {canSeeProfits && <KpiCard label="Gross Profit" value={INR(grossProfit)} deltaTone={grossProfit >= 0 ? "up" : "down"} delta={grossProfit >= 0 ? "Healthy margin" : "Negative"} icon={TrendingUp} iconBg={T.emeraldWash} iconColor={T.emerald} />}
+          {canSeeProfits && <KpiCard label="Net Profit" value={INR(netProfit)} deltaTone={netProfit >= 0 ? "up" : "down"} icon={netProfit >= 0 ? TrendingUp : TrendingDown} iconBg={netProfit >= 0 ? T.emeraldWash : T.redWash} iconColor={netProfit >= 0 ? T.emerald : T.red} />}
         </div>
       )}
 

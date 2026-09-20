@@ -19,7 +19,7 @@ create table profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   company_id uuid not null,
   name text not null,
-  role text not null check (role in ('Owner','Accountant','Sales','Inventory')),
+  role text not null check (role in ('Owner','Accountant','Sales','Inventory','Manager','Viewer')),
   status text not null default 'Active' check (status in ('Active','Deactivated')),
   created_at timestamptz default now()
 );
@@ -56,7 +56,7 @@ create table customers (
 create table vendors (
   id uuid primary key default gen_random_uuid(), company_id uuid not null,
   name text not null, contact text, phone text, email text, gstin text,
-  state text, address text, bank_name text, bank_account text,
+  state text, address text, bank_name text, bank_account text, bank_ifsc text,
   payment_terms text, created_at timestamptz default now()
 );
 
