@@ -72,12 +72,43 @@ export function getHostingerToken() {
 // Helper: Save token to config file
 export function saveHostingerToken(token) {
   try {
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify({ token: token.trim(), updatedAt: new Date().toISOString() }, null, 2), "utf8");
-    process.env.HOSTINGER_MAIL_API_TOKEN = token.trim();
+    const cleanToken = String(token || "").trim();
+    if (!cleanToken) {
+      throw new Error("Hostinger Mail API token is required.");
+    }
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify({ token: cleanToken, updatedAt: new Date().toISOString() }, null, 2), "utf8");
+    process.env.HOSTINGER_MAIL_API_TOKEN = cleanToken;
     return true;
   } catch (e) {
     console.error("[Hostinger Mail Backend] Failed to save token:", e);
     throw e;
+  }
+}
+
+export async function validateHostingerToken(token) {
+  const cleanToken = String(token || "").trim();
+  if (!cleanToken) {
+    throw new Error("Hostinger Mail API token is required.");
+  }
+
+  const previousToken = process.env.HOSTINGER_MAIL_API_TOKEN;
+  process.env.HOSTINGER_MAIL_API_TOKEN = cleanToken;
+
+  try {
+    await hostingerFetch("/api/v1/me");
+    return true;
+  } catch (err) {
+    throw new Error(
+      err?.message?.includes("NOT_FOUND") || err?.message?.includes("The page could not be found")
+        ? "The Hostinger Mail token is invalid or expired. Please generate a fresh bearer token and try again."
+        : err.message
+    );
+  } finally {
+    if (previousToken) {
+      process.env.HOSTINGER_MAIL_API_TOKEN = previousToken;
+    } else {
+      delete process.env.HOSTINGER_MAIL_API_TOKEN;
+    }
   }
 }
 
@@ -116,6 +147,11 @@ async function hostingerFetch(endpoint, options = {}) {
       const errTxt = await resp.text();
       if (errTxt) errMsg = errTxt.slice(0, 200);
     }
+
+    if (/NOT_FOUND|The page could not be found/i.test(errMsg)) {
+      throw new Error("The Hostinger Mail token is invalid or expired. Please generate a fresh bearer token and try again.");
+    }
+
     throw new Error(errMsg);
   }
 
@@ -419,12 +455,13 @@ export function createHostingerMailMiddleware() {
       req.on("end", async () => {
         try {
           const payload = JSON.parse(body || "{}");
-          if (!payload.token || !payload.token.trim()) {
+          const cleanToken = String(payload.token || "").trim();
+          if (!cleanToken) {
             throw new Error("Hostinger Mail API token is required");
           }
-          saveHostingerToken(payload.token.trim());
-          // Test token immediately
-          await hostingerFetch("/api/v1/me");
+
+          await validateHostingerToken(cleanToken);
+          saveHostingerToken(cleanToken);
 
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ success: true, isConnected: true }));
