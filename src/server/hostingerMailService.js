@@ -412,8 +412,9 @@ export async function sendHostingerEmail({ to, subject, text, html, displayName 
  */
 export function createHostingerMailMiddleware() {
   return async (req, res, next) => {
-    const url = new URL(req.url, `http://${req.headers.host || "localhost:5173"}`);
-    const pathname = url.pathname;
+    try {
+      const url = new URL(req.url, `http://${req.headers.host || "localhost:5173"}`);
+      const pathname = url.pathname;
 
     // ── 1. GET /api/mail/status ──
     if (pathname === "/api/mail/status" && req.method === "GET") {
@@ -634,5 +635,9 @@ export function createHostingerMailMiddleware() {
     }
 
     next();
+    } catch (err) {
+      console.error("[Hostinger Mail Middleware Error]:", err);
+      next();
+    }
   };
 }

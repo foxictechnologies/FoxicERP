@@ -187,24 +187,23 @@ create policy "sales-facing write customers" on customers for insert with check 
 create policy "sales-facing update customers" on customers for update using (company_id = my_company() and my_role() in ('Owner','Accountant','Sales'));
 create policy "sales-facing delete customers" on customers for delete using (company_id = my_company() and my_role() in ('Owner','Accountant','Sales'));
 
--- VENDORS: Owner and Accountant only
-create policy "finance read vendors" on vendors for select using (company_id = my_company() and my_role() in ('Owner','Accountant'));
+-- VENDORS: Owner, Accountant, Manager, and Viewer can read
+create policy "finance read vendors" on vendors for select using (company_id = my_company() and my_role() in ('Owner','Accountant','Manager','Viewer'));
 create policy "finance write vendors" on vendors for all using (company_id = my_company() and my_role() in ('Owner','Accountant'));
 
--- INVOICES: Owner/Accountant see everything; Sales sees invoices only (no cost/profit fields exist here anyway)
-create policy "read invoices" on invoices for select using (company_id = my_company() and my_role() in ('Owner','Accountant','Sales'));
+-- INVOICES: Owner, Accountant, Sales, Manager, and Viewer can read
+create policy "read invoices" on invoices for select using (company_id = my_company() and my_role() in ('Owner','Accountant','Sales','Manager','Viewer'));
 create policy "write invoices" on invoices for insert with check (company_id = my_company() and my_role() in ('Owner','Accountant','Sales'));
 create policy "update invoices" on invoices for update using (company_id = my_company() and my_role() in ('Owner','Accountant','Sales'));
 
--- PURCHASES / EXPENSES / PAYMENTS: Owner and Accountant only — this is the
--- server-side enforcement of "Sales/Inventory never see purchasing or P&L data"
-create policy "finance read purchases" on purchases for select using (company_id = my_company() and my_role() in ('Owner','Accountant'));
+-- PURCHASES / EXPENSES / PAYMENTS:
+create policy "finance read purchases" on purchases for select using (company_id = my_company() and my_role() in ('Owner','Accountant','Manager','Viewer'));
 create policy "finance write purchases" on purchases for all using (company_id = my_company() and my_role() in ('Owner','Accountant'));
 
-create policy "finance read expenses" on expenses for select using (company_id = my_company() and my_role() in ('Owner','Accountant'));
+create policy "finance read expenses" on expenses for select using (company_id = my_company() and my_role() in ('Owner','Accountant','Manager','Viewer'));
 create policy "finance write expenses" on expenses for all using (company_id = my_company() and my_role() in ('Owner','Accountant'));
 
-create policy "finance read payments" on payments for select using (company_id = my_company() and my_role() in ('Owner','Accountant'));
+create policy "finance read payments" on payments for select using (company_id = my_company() and my_role() in ('Owner','Accountant','Manager','Viewer'));
 create policy "finance write payments" on payments for all using (company_id = my_company() and my_role() in ('Owner','Accountant'));
 
 -- STOCK LEDGER: Owner and Inventory only

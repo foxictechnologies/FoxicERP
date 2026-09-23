@@ -153,18 +153,17 @@ export default function TasksModule({ ctx }) {
 
   const today = todayISO();
 
-  // Refresh tasks from DB (merging DB rows with current state so local tasks are never lost)
+  // Refresh tasks from DB (Supabase DB is authoritative)
   const refreshTasks = async () => {
     setRefreshing(true);
     try {
       const latest = await fetchTable("tasks", "created_at", false);
       if (latest && Array.isArray(latest)) {
-        setTasks((prev) => {
-          const map = new Map();
-          (prev || []).forEach((t) => { if (t?.id) map.set(t.id, t); });
-          latest.forEach((t) => { if (t?.id) map.set(t.id, t); });
-          return Array.from(map.values());
-        });
+        const filtered = company?.id ? latest.filter((t) => !t.companyId || t.companyId === company.id) : latest;
+        setTasks(filtered);
+        try {
+          localStorage.setItem("erp_tasks", JSON.stringify(filtered));
+        } catch (e) {}
       }
     } catch (e) {
       console.warn("Tasks refresh error:", e);
@@ -211,7 +210,7 @@ export default function TasksModule({ ctx }) {
   // 2. Assigned user can see tasks assigned to them
   // 3. Task Creator can see tasks created by them
   const userVisibleTasks = useMemo(() => {
-    if (isOwnerOrManager) return tasks;
+    if (isOwnerOrManager || isViewer) return tasks;
 
     if (!currentUser) return [];
 
@@ -293,17 +292,22 @@ export default function TasksModule({ ctx }) {
     setFormStatus("todo");
     setFormPriority("medium");
     setFormCategory("General");
-    setFormAssignedTo(currentUser?.id || "");
+    const isOwnerUser = (ctx.role || currentUser?.role) === "Owner" || currentUser?.role === "Business Owner";
+    setFormAssignedTo(isOwnerUser ? "" : (currentUser?.id || ""));
     setFormDueDate(todayISO());
     setFormAttachment(null);
     setFormError("");
     setModalOpen(true);
   };
 
-  // Open modal for editing
+  // Open modal for editing: ONLY Owner or Manager can edit task details (Completed tasks are locked)
   const handleOpenEdit = (task) => {
-    if (task?.assignedTo && !isOwnerOrManager && !isSelfTask(task)) {
-      alert("Once a task is assigned to someone else, only an Owner or Manager can edit its details.");
+    if (task?.status === "completed") {
+      alert("Completed tasks are permanently locked and cannot be edited.");
+      return;
+    }
+    if (!isOwnerOrManager) {
+      alert("Only an Owner or Manager can edit task details.");
       return;
     }
     setEditingTask(task);
@@ -330,14 +334,20 @@ export default function TasksModule({ ctx }) {
     setSaving(true);
     setFormError("");
 
-    if (!isOwnerOrManager && formAssignedTo && formAssignedTo !== currentUser?.id && formAssignedTo !== currentUser?.name) {
-      setFormError("Only Owners and Managers can assign tasks to other team members. You can only create tasks for yourself.");
+    if (editingTask?.status === "completed") {
+      setFormError("Completed tasks are permanently locked and cannot be edited.");
       setSaving(false);
       return;
     }
 
-    if (editingTask?.assignedTo && !isOwnerOrManager && !isSelfTask(editingTask)) {
-      setFormError("Once a task is assigned to someone else, only an Owner or Manager can edit its details.");
+    if (editingTask && !isOwnerOrManager) {
+      setFormError("Only an Owner or Manager can edit task details.");
+      setSaving(false);
+      return;
+    }
+
+    if (!isOwnerOrManager && formAssignedTo && formAssignedTo !== currentUser?.id && formAssignedTo !== currentUser?.name) {
+      setFormError("Only Owners and Managers can assign tasks to other team members. You can only create tasks for yourself.");
       setSaving(false);
       return;
     }
@@ -346,21 +356,28 @@ export default function TasksModule({ ctx }) {
     if (resolvedAssignedTo) {
       const matchUser = users.find((u) => u.id === resolvedAssignedTo || u.name === resolvedAssignedTo);
       if (matchUser?.id) resolvedAssignedTo = matchUser.id;
+      if (matchUser && (matchUser.role === "Owner" || matchUser.role === "Business Owner" || matchUser.role?.toLowerCase() === "owner")) {
+        setFormError("Business Owners cannot be assigned tasks. Please assign to a team member or leave unassigned.");
+        setSaving(false);
+        return;
+      }
     }
 
     const isSelfCurrent = isSelfTask(editingTask) || isSelfTask({ assignedTo: resolvedAssignedTo, createdBy: currentUser?.id });
 
     let finalStatus = formStatus;
-    if (editingTask?.status === "completed" && !isOwnerOrManager && !isSelfCurrent) {
-      if (formStatus !== "completed") {
-        setFormError("Completed tasks are locked. Only Owners, Managers, or the task assignee can change the status of completed tasks.");
-        setSaving(false);
-        return;
-      }
-    } else if (formStatus === "completed" && !isOwnerOrManager && !isSelfCurrent) {
-      alert("Only Owners, Managers, or the task assignee can mark tasks as Completed. Status set to 'Under Review'.");
+    if (editingTask?.status === "completed" && formStatus !== "completed") {
+      setFormError("Completed tasks are permanently locked and cannot be moved back to To Do, In Progress, or Under Review.");
+      setSaving(false);
+      return;
+    }
+
+    if (formStatus === "completed" && !isOwnerOrManager) {
+      alert("Only an Owner or Manager can mark tasks as Completed (Done) after Under Review. Task status has been set to 'Under Review'.");
       finalStatus = "review";
     }
+
+    const resolvedCompanyId = company?.id || currentUser?.companyId || ctx.profile?.companyId || null;
 
     const taskData = {
       title: formTitle.trim(),
@@ -370,12 +387,9 @@ export default function TasksModule({ ctx }) {
       category: formCategory,
       assignedTo: resolvedAssignedTo,
       createdBy: editingTask ? (editingTask.createdBy || currentUser?.id) : (currentUser?.id || null),
-      updatedBy: currentUser?.name || currentUser?.role || "Owner/Manager",
-      updatedById: currentUser?.id || null,
-      updatedByRole: ctx.role || currentUser?.role || "Team Member",
       dueDate: formDueDate || null,
       attachment: formAttachment || null,
-      companyId: company?.id || currentUser?.companyId || null,
+      companyId: resolvedCompanyId,
       updatedAt: new Date().toISOString()
     };
 
@@ -386,7 +400,7 @@ export default function TasksModule({ ctx }) {
           const updated = await updateRow("tasks", editingTask.id, taskData);
           if (updated) Object.assign(taskData, updated);
         } catch (err) {
-          console.warn("Supabase updateRow failed, updating local state:", err);
+          console.error("Supabase updateRow task error:", err);
         }
         setTasks((prev) =>
           prev.map((t) => (t.id === editingTask.id ? { ...t, ...taskData } : t))
@@ -408,7 +422,8 @@ export default function TasksModule({ ctx }) {
             if (inserted.createdAt) newTask.createdAt = inserted.createdAt;
           }
         } catch (err) {
-          console.warn("Supabase insertRow failed, saving locally:", err);
+          console.error("Supabase insertRow task error:", err);
+          alert("Backend DB Error: Could not save task to Supabase database.\n\n" + (err.message || err));
         }
 
         setTasks((prev) => [newTask, ...prev.filter((t) => t.id !== newTask.id)]);
@@ -422,27 +437,23 @@ export default function TasksModule({ ctx }) {
     }
   };
 
-  // Quick toggle task status: Owner/Manager or self-assignee marks Completed/Reopens
+  // Quick toggle task status
   const handleToggleComplete = async (task) => {
-    let newStatus = "completed";
-    const isSelf = isSelfTask(task);
+    if (isViewer) return;
 
-    if (!isOwnerOrManager && !isSelf) {
-      if (task.status === "completed") {
-        alert("Completed tasks are locked. Only Owners, Managers, or the task assignee can reopen or change completed tasks.");
-        return;
-      }
-      // Non-owner team member submitting someone else's task moves it to 'Under Review'
+    if (task.status === "completed") {
+      alert("Completed tasks are permanently locked and cannot be reopened or moved back.");
+      return;
+    }
+
+    let newStatus = "completed";
+    if (!isOwnerOrManager) {
+      alert("Task submitted for Under Review. Only an Owner or Manager can mark tasks as Completed (Done) after review.");
       newStatus = "review";
-    } else {
-      newStatus = task.status === "completed" ? "todo" : "completed";
     }
 
     const patch = {
       status: newStatus,
-      updatedBy: currentUser?.name || currentUser?.role || "Team Member",
-      updatedById: currentUser?.id || null,
-      updatedByRole: ctx.role || currentUser?.role || "Team Member",
       updatedAt: new Date().toISOString()
     };
 
@@ -465,26 +476,22 @@ export default function TasksModule({ ctx }) {
 
   // Change task status (e.g. from Kanban column move or select dropdown)
   const handleChangeStatus = async (taskId, requestedStatus) => {
+    if (isViewer) return;
     const existingTask = tasks.find((t) => t.id === taskId);
-    const isSelf = isSelfTask(existingTask);
 
-    if (existingTask?.status === "completed" && !isOwnerOrManager && !isSelf) {
-      alert("Completed tasks are locked. Only Owners, Managers, or the task assignee can reopen or change completed tasks.");
+    if (existingTask?.status === "completed" && requestedStatus !== "completed") {
+      alert("Completed tasks are permanently locked and cannot be moved back to To Do, In Progress, or Under Review.");
       return;
     }
 
     let newStatus = requestedStatus;
-
-    if (requestedStatus === "completed" && !isOwnerOrManager && !isSelf) {
-      alert("Only Owners, Managers, or the task assignee can mark tasks as Completed. Setting status to 'Under Review' for Manager approval.");
+    if (requestedStatus === "completed" && !isOwnerOrManager) {
+      alert("Only an Owner or Manager can mark tasks as Completed (Done) after Under Review. Setting status to 'Under Review'.");
       newStatus = "review";
     }
 
     const patch = {
       status: newStatus,
-      updatedBy: currentUser?.name || currentUser?.role || "Team Member",
-      updatedById: currentUser?.id || null,
-      updatedByRole: ctx.role || currentUser?.role || "Team Member",
       updatedAt: new Date().toISOString()
     };
 
@@ -505,13 +512,29 @@ export default function TasksModule({ ctx }) {
     }
   };
 
-  // Delete task
+  // Delete task:
+  // 1. Owner & Manager can delete ANY task at any time.
+  // 2. Assignee (team member) can ONLY delete their task AFTER it is marked Completed.
   const handleDelete = async (id) => {
+    if (isViewer) return;
     const taskToDelete = tasks.find((t) => t.id === id);
-    if (taskToDelete?.assignedTo && !isOwnerOrManager && !isSelfTask(taskToDelete)) {
-      alert("Once a task is assigned to someone else, only an Owner, Manager, or the assignee can delete it.");
-      return;
+    if (!taskToDelete) return;
+
+    const isSelf = isSelfTask(taskToDelete);
+
+    if (!isOwnerOrManager) {
+      if (taskToDelete.assignedTo) {
+        if (taskToDelete.status !== "completed") {
+          alert("Assigned tasks can only be deleted after they are marked Completed by an Owner or Manager.");
+          return;
+        }
+        if (!isSelf) {
+          alert("You can only delete your own assigned completed tasks.");
+          return;
+        }
+      }
     }
+
     try {
       await deleteRow("tasks", id);
     } catch (err) {
@@ -752,11 +775,13 @@ export default function TasksModule({ ctx }) {
               <option value="all">Assignee: All</option>
               {currentUser && <option value="me">Assigned to Me</option>}
               <option value="unassigned">Unassigned</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} ({u.role})
-                </option>
-              ))}
+              {users
+                .filter((u) => u.role !== "Owner" && u.role !== "Business Owner" && u.role?.toLowerCase() !== "owner")
+                .map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} ({u.role})
+                  </option>
+                ))}
             </select>
 
             {/* Priority filter */}
@@ -1023,7 +1048,7 @@ export default function TasksModule({ ctx }) {
                         {/* Quick actions on card */}
                         <div className="mt-2.5 flex items-center justify-between gap-1 pt-2" style={{ borderTop: `1px dashed ${T.borderSoft}` }}>
                           {/* Column move dropdown */}
-                          {isViewer || (task.status === "completed" && !isOwnerOrManager && !isSelfTask(task)) ? (
+                          {isViewer || task.status === "completed" ? (
                             <span className="text-[11px] font-medium py-1 px-1.5 rounded-lg opacity-80" style={{ background: T.bg, color: T.inkSoft }}>
                               {task.status === "completed" ? "Completed (Locked)" : task.status === "in_progress" ? "In Progress" : task.status === "review" ? "Review" : "To Do"}
                             </span>
@@ -1042,34 +1067,38 @@ export default function TasksModule({ ctx }) {
                               <option value="todo">To Do</option>
                               <option value="in_progress">In Progress</option>
                               <option value="review">Under Review</option>
-                              {(isOwnerOrManager || isSelfTask(task)) && <option value="completed">Done (Completed)</option>}
+                              {isOwnerOrManager && <option value="completed">Done (Completed)</option>}
                             </select>
                           )}
 
-                          {!isViewer && (isOwnerOrManager || !task.assignedTo || isSelfTask(task)) && (
+                          {!isViewer && (
                             <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenEdit(task);
-                                }}
-                                className="p-1 rounded-lg hover:bg-black/5 text-inkSoft"
-                                title="Edit Task"
-                              >
-                                <Edit3 size={13} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteConfirmId(task.id);
-                                }}
-                                className="p-1 rounded-lg hover:bg-red-50 text-red-600"
-                                title="Delete Task"
-                              >
-                                <Trash2 size={13} />
-                              </button>
+                              {isOwnerOrManager && task.status !== "completed" && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenEdit(task);
+                                  }}
+                                  className="p-1 rounded-lg hover:bg-black/5 text-inkSoft"
+                                  title="Edit Task"
+                                >
+                                  <Edit3 size={13} />
+                                </button>
+                              )}
+                              {(isOwnerOrManager || !task.assignedTo || (task.status === "completed" && isSelfTask(task))) && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteConfirmId(task.id);
+                                  }}
+                                  className="p-1 rounded-lg hover:bg-red-50 text-red-600"
+                                  title="Delete Task"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1225,7 +1254,7 @@ export default function TasksModule({ ctx }) {
 
                       {/* Status */}
                       <td className="py-3 px-4">
-                        {isViewer || (task.status === "completed" && !isOwnerOrManager && !isSelfTask(task)) ? (
+                        {isViewer || task.status === "completed" ? (
                           <span className="text-xs font-medium py-1 px-2 rounded-lg opacity-80" style={{ background: T.bg, color: T.ink }}>
                             {task.status === "completed" ? "Completed (Locked)" : task.status === "in_progress" ? "In Progress" : task.status === "review" ? "Review" : "To Do"}
                           </span>
@@ -1244,7 +1273,7 @@ export default function TasksModule({ ctx }) {
                             <option value="todo">To Do</option>
                             <option value="in_progress">In Progress</option>
                             <option value="review">Under Review</option>
-                            {(isOwnerOrManager || isSelfTask(task)) && <option value="completed">Completed</option>}
+                            {isOwnerOrManager && <option value="completed">Completed</option>}
                           </select>
                         )}
                       </td>
@@ -1289,8 +1318,8 @@ export default function TasksModule({ ctx }) {
                       {/* Actions */}
                       {!isViewer && (
                         <td className="py-3 px-4 text-right">
-                          {(isOwnerOrManager || !task.assignedTo || isSelfTask(task)) && (
-                            <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {isOwnerOrManager && task.status !== "completed" && (
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -1303,6 +1332,8 @@ export default function TasksModule({ ctx }) {
                               >
                                 <Edit3 size={14} />
                               </button>
+                            )}
+                            {(isOwnerOrManager || !task.assignedTo || (task.status === "completed" && isSelfTask(task))) && (
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -1314,8 +1345,8 @@ export default function TasksModule({ ctx }) {
                               >
                                 <Trash2 size={14} />
                               </button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -1405,6 +1436,8 @@ export default function TasksModule({ ctx }) {
                 <option value="">Unassigned</option>
                 {users
                   .filter((u) => {
+                    const isOwnerRole = u.role === "Owner" || u.role === "Business Owner" || u.role?.toLowerCase() === "owner";
+                    if (isOwnerRole) return false; // Exclude Owners from task assignment
                     const isOwnerOrManager = (ctx.role || currentUser?.role) === "Owner" || (ctx.role || currentUser?.role) === "Manager";
                     if (isOwnerOrManager) return true;
                     return u.id === currentUser?.id || u.name === currentUser?.name;

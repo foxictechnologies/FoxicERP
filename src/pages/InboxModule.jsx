@@ -103,7 +103,7 @@ function formatEmailDate(dateStr) {
 export default function InboxModule({ ctx }) {
   const { emails = [], setEmails, toast, company, role } = ctx;
 
-  const isAllowed = role === "Owner" || role === "Manager";
+  const isAllowed = role === "Owner" || role === "Manager" || role === "Viewer";
   const isViewer = role === "Viewer";
 
   const [connectionStatus, setConnectionStatus] = useState({
@@ -1097,25 +1097,27 @@ export default function InboxModule({ ctx }) {
                       </div>
 
                       {/* Quick Delete button */}
-                      <button
-                        onClick={(e) => handleMoveToTrash(e, email)}
-                        title={email.folder === "trash" || (email.raw_folder || "").toLowerCase().includes("trash") ? "Delete permanently" : "Move to trash"}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          padding: "4px 6px",
-                          borderRadius: 6,
-                          color: T.inkFaint,
-                          display: "flex",
-                          alignItems: "center",
-                          transition: "color 0.15s ease"
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.color = T.red}
-                        onMouseLeave={(e) => e.currentTarget.style.color = T.inkFaint}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {!isViewer && (
+                        <button
+                          onClick={(e) => handleMoveToTrash(e, email)}
+                          title={email.folder === "trash" || (email.raw_folder || "").toLowerCase().includes("trash") ? "Delete permanently" : "Move to trash"}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: "4px 6px",
+                            borderRadius: 6,
+                            color: T.inkFaint,
+                            display: "flex",
+                            alignItems: "center",
+                            transition: "color 0.15s ease"
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.color = T.red}
+                          onMouseLeave={(e) => e.currentTarget.style.color = T.inkFaint}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -1182,29 +1184,31 @@ export default function InboxModule({ ctx }) {
                   </button>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <button
-                    onClick={(e) => handleMoveToTrash(e, selectedEmail)}
-                    disabled={isDeleting}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: "6px 10px",
-                      borderRadius: 8,
-                      color: T.red,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 4,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      opacity: isDeleting ? 0.5 : 1
-                    }}
-                  >
-                    <Trash2 size={15} />
-                    {selectedEmail.folder === "trash" || (selectedEmail.raw_folder || "").toLowerCase().includes("trash") ? "Delete Permanently" : "Delete"}
-                  </button>
-                </div>
+                {!isViewer && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                      onClick={(e) => handleMoveToTrash(e, selectedEmail)}
+                      disabled={isDeleting}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: "6px 10px",
+                        borderRadius: 8,
+                        color: T.red,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        opacity: isDeleting ? 0.5 : 1
+                      }}
+                    >
+                      <Trash2 size={15} />
+                      {selectedEmail.folder === "trash" || (selectedEmail.raw_folder || "").toLowerCase().includes("trash") ? "Delete Permanently" : "Delete"}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Subject & Category */}
@@ -1378,103 +1382,105 @@ export default function InboxModule({ ctx }) {
             </div>
 
             {/* Bottom Inline Quick Reply Section */}
-            <div style={{
-              padding: "16px 20px",
-              borderTop: `1px solid ${T.border}`,
-              background: "#FAFAFC",
-              display: "flex",
-              flexDirection: "column",
-              gap: 10
-            }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ fontSize: 12, color: T.inkSoft, display: "flex", alignItems: "center", gap: 6 }}>
-                  <span>Replying to:</span>
-                  <b style={{ color: T.navy }}>{replyTargetEmail || selectedEmail.sender_email}</b>
-                  <span style={{ color: T.inkFaint }}>· from {FOXIC_EMAIL}</span>
-                </div>
-                <button
-                  onClick={() => {
-                    setComposeForm({
-                      to: replyTargetEmail || selectedEmail.sender_email,
-                      subject: selectedEmail.subject.startsWith("Re:") ? selectedEmail.subject : `Re: ${selectedEmail.subject}`,
-                      body: `\n\n--- On ${new Date(selectedEmail.received_at).toLocaleString()}, ${selectedEmail.sender_name || selectedEmail.sender_email} wrote:\n> ${selectedEmail.snippet || selectedEmail.body_text}`,
-                      category: selectedEmail.category || "General"
-                    });
-                    setShowComposeModal(true);
-                  }}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: T.navy,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                    padding: 0
-                  }}
-                >
-                  <ExternalLink size={13} />
-                  Full Compose Modal
-                </button>
-              </div>
-
-              {/* Inline Text Area */}
-              <div style={{ position: "relative" }}>
-                <textarea
-                  rows={3}
-                  placeholder={`Write a quick reply to ${replyTargetName.split(" ")[0]}...`}
-                  value={quickReplyText}
-                  onChange={(e) => setQuickReplyText(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "10px 14px",
-                    borderRadius: 10,
-                    border: `1px solid ${T.border}`,
-                    background: "#fff",
-                    fontSize: 13,
-                    outline: "none",
-                    fontFamily: "inherit",
-                    resize: "none",
-                    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.03)"
-                  }}
-                />
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
-                {quickReplyText.trim() && (
-                  <Btn
-                    variant="outline"
-                    onClick={() => setQuickReplyText("")}
-                    style={{ fontSize: 12, padding: "6px 12px" }}
+            {!isViewer && (
+              <div style={{
+                padding: "16px 20px",
+                borderTop: `1px solid ${T.border}`,
+                background: "#FAFAFC",
+                display: "flex",
+                flexDirection: "column",
+                gap: 10
+              }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ fontSize: 12, color: T.inkSoft, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span>Replying to:</span>
+                    <b style={{ color: T.navy }}>{replyTargetEmail || selectedEmail.sender_email}</b>
+                    <span style={{ color: T.inkFaint }}>· from {FOXIC_EMAIL}</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setComposeForm({
+                        to: replyTargetEmail || selectedEmail.sender_email,
+                        subject: selectedEmail.subject.startsWith("Re:") ? selectedEmail.subject : `Re: ${selectedEmail.subject}`,
+                        body: `\n\n--- On ${new Date(selectedEmail.received_at).toLocaleString()}, ${selectedEmail.sender_name || selectedEmail.sender_email} wrote:\n> ${selectedEmail.snippet || selectedEmail.body_text}`,
+                        category: selectedEmail.category || "General"
+                      });
+                      setShowComposeModal(true);
+                    }}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: T.navy,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: 0
+                    }}
                   >
-                    Clear
-                  </Btn>
-                )}
-                <Btn
-                  variant="primary"
-                  onClick={handleSendQuickReply}
-                  disabled={isQuickReplying || !quickReplyText.trim()}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    background: T.navy,
-                    fontSize: 13,
-                    padding: "8px 16px",
-                    opacity: (isQuickReplying || !quickReplyText.trim()) ? 0.6 : 1
-                  }}
-                >
-                  {isQuickReplying ? (
-                    <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
-                  ) : (
-                    <Send size={14} />
+                    <ExternalLink size={13} />
+                    Full Compose Modal
+                  </button>
+                </div>
+
+                {/* Inline Text Area */}
+                <div style={{ position: "relative" }}>
+                  <textarea
+                    rows={3}
+                    placeholder={`Write a quick reply to ${replyTargetName.split(" ")[0]}...`}
+                    value={quickReplyText}
+                    onChange={(e) => setQuickReplyText(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
+                      borderRadius: 10,
+                      border: `1px solid ${T.border}`,
+                      background: "#fff",
+                      fontSize: 13,
+                      outline: "none",
+                      fontFamily: "inherit",
+                      resize: "none",
+                      boxShadow: "inset 0 1px 2px rgba(0,0,0,0.03)"
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+                  {quickReplyText.trim() && (
+                    <Btn
+                      variant="outline"
+                      onClick={() => setQuickReplyText("")}
+                      style={{ fontSize: 12, padding: "6px 12px" }}
+                    >
+                      Clear
+                    </Btn>
                   )}
-                  {isQuickReplying ? "Sending..." : `Send Reply`}
-                </Btn>
+                  <Btn
+                    variant="primary"
+                    onClick={handleSendQuickReply}
+                    disabled={isQuickReplying || !quickReplyText.trim()}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      background: T.navy,
+                      fontSize: 13,
+                      padding: "8px 16px",
+                      opacity: (isQuickReplying || !quickReplyText.trim()) ? 0.6 : 1
+                    }}
+                  >
+                    {isQuickReplying ? (
+                      <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
+                    ) : (
+                      <Send size={14} />
+                    )}
+                    {isQuickReplying ? "Sending..." : `Send Reply`}
+                  </Btn>
+                </div>
               </div>
-            </div>
+            )}
           </Card>
         )}
       </div>

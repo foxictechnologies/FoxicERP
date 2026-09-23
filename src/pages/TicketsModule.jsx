@@ -1517,7 +1517,7 @@ KPI CARDS
                         >
                           <option value="">— Unassigned (General) —</option>
                           {users
-                            .filter((u) => ((role || ctx.currentUser?.role) === "Owner") || u.role !== "Owner")
+                            .filter((u) => u.role !== "Owner" && u.role !== "Business Owner" && u.role?.toLowerCase() !== "owner")
                             .map((u) => (
                               <option key={u.id} value={u.id}>
                                 Forward to: {u.name} ({u.role})
@@ -1667,7 +1667,7 @@ KPI CARDS
                 >
                   <option value="">— Unassigned —</option>
                   {users
-                    .filter((u) => ((role || ctx.currentUser?.role) === "Owner") || u.role !== "Owner")
+                    .filter((u) => u.role !== "Owner" && u.role !== "Business Owner" && u.role?.toLowerCase() !== "owner")
                     .map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.name} ({u.role})

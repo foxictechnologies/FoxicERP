@@ -11,7 +11,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
-import { X, ArrowUpRight, ArrowDownRight, AlertCircle, Search, ChevronDown, Check, Globe } from "lucide-react";
+import { X, ArrowUpRight, ArrowDownRight, AlertCircle, Search, ChevronDown, Check, Globe, CheckCircle2, XCircle, RotateCcw } from "lucide-react";
 import { T } from "../lib/constants";
 import { INR } from "../lib/format";
 
@@ -244,6 +244,88 @@ export function Btn({
 }
 
 export const Button = Btn;
+
+/* =========================================================
+   APPLE-STYLE ACTION BUTTONS (ACCEPT, REJECT, CANCEL)
+   ========================================================= */
+
+export function AcceptBtn({ children = "Accept", onClick, title, disabled, className = "", icon: Icon = CheckCircle2 }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`
+        inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full
+        transition-all duration-200 ease-out cursor-pointer select-none
+        hover:scale-[1.04] active:scale-[0.96] disabled:opacity-40 disabled:cursor-not-allowed
+        shadow-[0_2px_8px_rgba(36,138,61,0.22)] hover:shadow-[0_4px_14px_rgba(36,138,61,0.32)]
+        ${className}
+      `}
+      style={{
+        background: "linear-gradient(135deg, #248A3D 0%, #1B7030 100%)",
+        color: "#FFFFFF",
+        border: "1px solid rgba(255, 255, 255, 0.25)"
+      }}
+    >
+      {Icon && <Icon size={13} className="shrink-0 stroke-[2.5]" />}
+      <span>{children}</span>
+    </button>
+  );
+}
+
+export function RejectBtn({ children = "Reject", onClick, title, disabled, className = "", icon: Icon = XCircle }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`
+        inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full
+        transition-all duration-200 ease-out cursor-pointer select-none
+        hover:scale-[1.04] active:scale-[0.96] disabled:opacity-40 disabled:cursor-not-allowed
+        shadow-[0_2px_8px_rgba(215,0,21,0.22)] hover:shadow-[0_4px_14px_rgba(215,0,21,0.32)]
+        ${className}
+      `}
+      style={{
+        background: "linear-gradient(135deg, #D70015 0%, #AD0011 100%)",
+        color: "#FFFFFF",
+        border: "1px solid rgba(255, 255, 255, 0.25)"
+      }}
+    >
+      {Icon && <Icon size={13} className="shrink-0 stroke-[2.5]" />}
+      <span>{children}</span>
+    </button>
+  );
+}
+
+export function CancelBtn({ children = "Cancel Request", onClick, title, disabled, className = "", icon: Icon = RotateCcw }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`
+        inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full
+        transition-all duration-200 ease-out cursor-pointer select-none
+        hover:scale-[1.04] active:scale-[0.96] disabled:opacity-40 disabled:cursor-not-allowed
+        shadow-[0_1px_4px_rgba(215,0,21,0.08)] hover:shadow-[0_3px_10px_rgba(215,0,21,0.18)]
+        ${className}
+      `}
+      style={{
+        background: "linear-gradient(135deg, rgba(215, 0, 21, 0.08) 0%, rgba(215, 0, 21, 0.15) 100%)",
+        color: "#D70015",
+        border: "1px solid rgba(215, 0, 21, 0.28)"
+      }}
+    >
+      {Icon && <Icon size={13} className="shrink-0 stroke-[2.2]" />}
+      <span>{children}</span>
+    </button>
+  );
+}
 
 
 /* =========================================================

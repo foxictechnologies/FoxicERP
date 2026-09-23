@@ -54,9 +54,6 @@ const TABLE_COLUMNS = {
     "category",
     "assignedTo",
     "createdBy",
-    "updatedBy",
-    "updatedById",
-    "updatedByRole",
     "dueDate",
     "attachment",
     "createdAt",
@@ -181,6 +178,35 @@ export async function updateRow(table, id, patch) {
 export async function deleteRow(table, id) {
   const { error } = await supabase.from(table).delete().eq("id", id);
   if (error) throw error;
+}
+
+export async function deleteUserProfile(userId) {
+  if (!userId) return;
+  const unlinkTables = [
+    { table: "tasks", col: "assigned_to" },
+    { table: "tasks", col: "created_by" },
+    { table: "tickets", col: "assigned_to" },
+    { table: "invoices", col: "created_by" },
+    { table: "purchases", col: "created_by" },
+    { table: "payments", col: "created_by" },
+    { table: "expenses", col: "created_by" }
+  ];
+
+  for (const item of unlinkTables) {
+    try {
+      await supabase.from(item.table).update({ [item.col]: null }).eq(item.col, userId);
+    } catch (e) {}
+  }
+
+  try {
+    await supabase.from("audit_log").delete().eq("user_id", userId);
+  } catch (e) {}
+
+  const { error } = await supabase.from("profiles").delete().eq("id", userId);
+  if (error) {
+    console.warn("deleteUserProfile DB delete warning:", error.message);
+    await supabase.from("profiles").update({ status: "Deactivated" }).eq("id", userId);
+  }
 }
 
 /**

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Lock, History, Save, Search, Clock, ShieldAlert, CheckCircle2, XCircle, Trash2, KeyRound } from "lucide-react";
 import { T, ROLES } from "../lib/constants";
-import { Card, Badge, Btn, Field, Input, Select, Modal, EmptyState, SectionHeader } from "../components/ui";
-import { insertRow, updateRow, deleteRow } from "../lib/db";
+import { Card, Badge, Btn, Field, Input, Select, Modal, EmptyState, SectionHeader, AcceptBtn, RejectBtn, CancelBtn } from "../components/ui";
+import { insertRow, updateRow, deleteRow, deleteUserProfile } from "../lib/db";
 import { supabase } from "../supabaseClient";
 
 // Local Storage helpers for Manager Pending Requests (avoids Supabase RLS permission errors for non-Owners)
@@ -95,31 +95,52 @@ export default function UsersAuditModule({ ctx }) {
       loading: false,
       onConfirm: async (enteredPassword) => {
         if (!enteredPassword) {
-          setPwdModal((prev) => ({ ...prev, error: "Please enter your password." }));
+          setPwdModal((prev) => ({ ...prev, error: "Please enter your login password." }));
           return;
         }
+
         setPwdModal((prev) => ({ ...prev, loading: true, error: "" }));
         try {
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email: currentUser.email,
-            password: enteredPassword
-          });
-          if (error) {
-            setPwdModal((prev) => ({ ...prev, loading: false, error: "Incorrect login password! Access denied." }));
+          const userEmail = currentUser?.email;
+          if (!userEmail) {
+            setPwdModal((prev) => ({ ...prev, loading: false, error: "User email not found for verification." }));
             return;
           }
-          setPwdModal((prev) => ({ ...prev, open: false, loading: false }));
+
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: userEmail,
+            password: enteredPassword
+          });
+
+          if (error) {
+            console.warn("Auth password verification failed:", error.message);
+            setPwdModal((prev) => ({
+              ...prev,
+              loading: false,
+              error: "Galat Password! Kripya apna sahi login password daalein."
+            }));
+            return; // STRICT STOP on wrong password
+          }
+
+          // Verification succeeded
+          setPwdModal((prev) => ({ ...prev, open: false, loading: false, password: "", error: "" }));
           await onVerified();
         } catch (err) {
-          setPwdModal((prev) => ({ ...prev, loading: false, error: err.message || "Password verification failed." }));
+          console.error("Password verification error:", err);
+          setPwdModal((prev) => ({
+            ...prev,
+            loading: false,
+            error: err.message || "Password verification failed."
+          }));
         }
       }
     });
   };
 
-  const isOwner = role === "Owner";
-  const isManager = role === "Manager";
-  const isViewer = role === "Viewer";
+  const isOwnerRole = (r) => r === "Owner" || r === "Business Owner" || (typeof r === "string" && r.toLowerCase().includes("owner"));
+  const isOwner = role === "Owner" || role === "Business Owner";
+  const isManager = role === "Manager" || role === "Operations Manager";
+  const isViewer = role === "Viewer" || role === "Viewer (Read Only)";
 
   if (!isOwner && !isManager && !isViewer) {
     return (
@@ -252,83 +273,93 @@ export default function UsersAuditModule({ ctx }) {
   };
 
   const rejectUser = (p) => {
-    if (!isOwner) return;
-    if (!confirm(`Reject user creation request for ${p.name}?`)) return;
+    const isRequester = currentUser?.name === p.requestedBy || currentUser?.id === p.requestedById;
+    if (!isOwner && !isManager && !isRequester) return;
+
+    if (!confirm(`Cancel user creation request for ${p.name}?`)) return;
 
     const updatedPending = pendingUsers.filter((item) => item.id !== p.id);
     savePendingUsers(company.id, updatedPending);
     setPendingUsers(updatedPending);
 
-    ctx.logAudit("User creation rejected", `${p.name} creation request rejected by Owner`);
+    ctx.logAudit("User creation request cancelled", `${p.name} creation request cancelled/rejected`);
+    alert(`User creation request for ${p.name} cancelled.`);
   };
 
   const changeRole = async (u, newRole) => {
     if (u.id === currentUser.id) return;
-    if ((u.role === "Owner" || newRole === "Owner") && !isOwner) {
+    if ((isOwnerRole(u.role) || isOwnerRole(newRole)) && !isOwner) {
       alert("Manager Business Owner role change ya request nahi kar sakte.");
       return;
     }
 
-    const isTargetOwner = u.role === "Owner";
+    const isTargetOwner = isOwnerRole(u.role);
 
-    if (isOwner && isTargetOwner) {
-      // Business Owner changing ANOTHER Business Owner's role -> Requires target Owner's accept/reject!
-      const updatedPendingRoles = {
-        ...pendingRoles,
-        [u.id]: {
-          requestedRole: newRole,
-          requestedBy: currentUser?.name || "Business Owner",
-          requestedById: currentUser?.id,
-          targetUserId: u.id,
-          isOwnerToOwner: true,
-          createdAt: new Date().toISOString()
+    promptPasswordVerify(
+      "Confirm Password to Change Role",
+      `Enter your login password to ${isOwner ? (isTargetOwner ? "request" : "change") : "request"} ${u.name}'s role to ${newRole}.`,
+      async () => {
+        if (isOwner && isTargetOwner) {
+          // Business Owner changing ANOTHER Business Owner's role -> Requires target Owner's accept/reject!
+          const updatedPendingRoles = {
+            ...pendingRoles,
+            [u.id]: {
+              requestedRole: newRole,
+              requestedBy: currentUser?.name || "Business Owner",
+              requestedById: currentUser?.id,
+              targetUserId: u.id,
+              isOwnerToOwner: true,
+              createdAt: new Date().toISOString()
+            }
+          };
+          savePendingRoles(company.id, updatedPendingRoles);
+          setPendingRoles(updatedPendingRoles);
+
+          ctx.logAudit(
+            "Owner role change requested",
+            `${u.name}: role change to ${newRole} requested by ${currentUser?.name || "Business Owner"}`
+          );
+          alert(`Role change request sent to ${u.name} (${newRole}). It will take effect once they Accept or Reject it.`);
+          return;
         }
-      };
-      savePendingRoles(company.id, updatedPendingRoles);
-      setPendingRoles(updatedPendingRoles);
 
-      ctx.logAudit(
-        "Owner role change requested",
-        `${u.name}: role change to ${newRole} requested by ${currentUser?.name || "Business Owner"}`
-      );
-      alert(`Role change request sent to ${u.name} (${newRole}). It will take effect once they Accept or Reject it.`);
-      return;
-    }
+        if (isOwner) {
+          // Owner updates non-Owner role directly in DB
+          try {
+            const row = await updateRow("profiles", u.id, { role: newRole });
+            setUsers((prev) => prev.map((x) => (x.id === row.id ? row : x)));
 
-    if (isOwner) {
-      // Owner updates non-Owner role directly in DB
-      try {
-        const row = await updateRow("profiles", u.id, { role: newRole });
-        setUsers((prev) => prev.map((x) => (x.id === row.id ? row : x)));
+            const updatedPendingRoles = { ...pendingRoles };
+            delete updatedPendingRoles[u.id];
+            savePendingRoles(company.id, updatedPendingRoles);
+            setPendingRoles(updatedPendingRoles);
 
-        const updatedPendingRoles = { ...pendingRoles };
-        delete updatedPendingRoles[u.id];
-        savePendingRoles(company.id, updatedPendingRoles);
-        setPendingRoles(updatedPendingRoles);
+            ctx.logAudit("User role changed", `${u.name}: ${u.role} → ${newRole}`);
+            alert(`Role for ${u.name} changed to ${newRole}.`);
+          } catch (e) {
+            alert("Could not change role: " + e.message);
+          }
+        } else {
+          // Manager requests role change
+          const updatedPendingRoles = {
+            ...pendingRoles,
+            [u.id]: {
+              requestedRole: newRole,
+              requestedBy: currentUser?.name || "Manager",
+              requestedById: currentUser?.id,
+              targetUserId: u.id,
+              isOwnerToOwner: false,
+              createdAt: new Date().toISOString()
+            }
+          };
+          savePendingRoles(company.id, updatedPendingRoles);
+          setPendingRoles(updatedPendingRoles);
 
-        ctx.logAudit("User role changed", `${u.name}: ${u.role} → ${newRole}`);
-      } catch (e) {
-        alert("Could not change role: " + e.message);
+          ctx.logAudit("Role change requested", `${u.name}: requested ${newRole} by ${currentUser?.name || "Manager"}`);
+          alert(`Role change request for ${u.name} (${newRole}) sent to Owner for approval.`);
+        }
       }
-    } else {
-      // Manager requests role change
-      const updatedPendingRoles = {
-        ...pendingRoles,
-        [u.id]: {
-          requestedRole: newRole,
-          requestedBy: currentUser?.name || "Manager",
-          requestedById: currentUser?.id,
-          targetUserId: u.id,
-          isOwnerToOwner: false,
-          createdAt: new Date().toISOString()
-        }
-      };
-      savePendingRoles(company.id, updatedPendingRoles);
-      setPendingRoles(updatedPendingRoles);
-
-      ctx.logAudit("Role change requested", `${u.name}: requested ${newRole} by ${currentUser?.name || "Manager"}`);
-      alert(`Role change request for ${u.name} (${newRole}) sent to Owner for approval.`);
-    }
+    );
   };
 
   const approveRoleChange = async (u, requestedRole) => {
@@ -343,44 +374,51 @@ export default function UsersAuditModule({ ctx }) {
 
     if (!isOwnerToOwner && !isOwner) return;
 
-    try {
-      const row = await updateRow("profiles", u.id, { role: requestedRole });
-      setUsers((prev) => prev.map((x) => (x.id === row.id ? row : x)));
+    promptPasswordVerify(
+      `Confirm Password to ${isOwnerToOwner ? "Accept Role Change" : "Approve Role Change"}`,
+      `Enter your login password to approve role change to ${requestedRole} for ${u.name}.`,
+      async () => {
+        try {
+          const row = await updateRow("profiles", u.id, { role: requestedRole });
+          setUsers((prev) => prev.map((x) => (x.id === row.id ? row : x)));
 
-      const updatedPendingRoles = { ...pendingRoles };
-      delete updatedPendingRoles[u.id];
-      savePendingRoles(company.id, updatedPendingRoles);
-      setPendingRoles(updatedPendingRoles);
+          const updatedPendingRoles = { ...pendingRoles };
+          delete updatedPendingRoles[u.id];
+          savePendingRoles(company.id, updatedPendingRoles);
+          setPendingRoles(updatedPendingRoles);
 
-      ctx.logAudit("Role change accepted", `${u.name} accepted role change to ${requestedRole}`);
-      alert(`Role change for ${u.name} to ${requestedRole} accepted and active.`);
+          ctx.logAudit("Role change accepted", `${u.name} accepted role change to ${requestedRole}`);
+          alert(`Role change for ${u.name} to ${requestedRole} accepted and active.`);
 
-      if (u.id === currentUser.id) {
-        window.location.reload();
+          if (u.id === currentUser.id) {
+            window.location.reload();
+          }
+        } catch (e) {
+          alert("Could not approve role change: " + e.message);
+        }
       }
-    } catch (e) {
-      alert("Could not approve role change: " + e.message);
-    }
+    );
   };
 
   const rejectRoleChange = (u) => {
     const roleReq = pendingRoles[u.id];
     const isOwnerToOwner = roleReq?.isOwnerToOwner;
+    const isRequester = currentUser?.id === roleReq?.requestedById || currentUser?.name === roleReq?.requestedBy;
 
-    if (isOwnerToOwner && u.id !== currentUser.id && currentUser.id !== roleReq?.requestedById) {
-      alert(`Only ${u.name} or the requesting Owner can cancel/reject this request.`);
+    if (isOwnerToOwner && u.id !== currentUser.id && !isRequester) {
+      alert(`Only ${u.name} or the requesting user can cancel/reject this request.`);
       return;
     }
 
-    if (!isOwnerToOwner && !isOwner) return;
+    if (!isOwnerToOwner && !isOwner && !isRequester && !isManager) return;
 
     const updatedPendingRoles = { ...pendingRoles };
     delete updatedPendingRoles[u.id];
     savePendingRoles(company.id, updatedPendingRoles);
     setPendingRoles(updatedPendingRoles);
 
-    ctx.logAudit("Role change rejected", `${u.name} role change rejected/cancelled`);
-    alert(`Role change request for ${u.name} was rejected/cancelled.`);
+    ctx.logAudit("Role change cancelled", `${u.name} role change request cancelled/rejected`);
+    alert(`Role change request for ${u.name} was cancelled/rejected.`);
   };
 
   const toggleStatus = async (u) => {
@@ -389,7 +427,7 @@ export default function UsersAuditModule({ ctx }) {
     const actionName = newStatus === "Active" ? "reactivate" : "deactivate";
 
     if (isManager) {
-      if (u.role === "Owner") {
+      if (isOwnerRole(u.role)) {
         alert("Managers cannot deactivate or reactivate Business Owner accounts.");
         return;
       }
@@ -406,6 +444,7 @@ export default function UsersAuditModule({ ctx }) {
               targetUserRole: u.role,
               requestedBy: currentUser?.name || "Manager",
               requestedById: currentUser?.id,
+              isOwnerToOwner: false,
               createdAt: new Date().toISOString()
             }
           };
@@ -419,7 +458,34 @@ export default function UsersAuditModule({ ctx }) {
     }
 
     if (isOwner) {
-      if (u.role === "Owner" && u.status === "Active" && !confirm("Deactivating an Owner account could lock out management. Continue?")) return;
+      if (isOwnerRole(u.role)) {
+        // Business Owner deactivating/reactivating ANOTHER Business Owner -> Requires target Owner's accept/reject!
+        promptPasswordVerify(
+          `Confirm Password to Request ${newStatus} for Owner`,
+          `Enter your login password to submit a request to Business Owner ${u.name} to ${actionName} their account.`,
+          async () => {
+            const updated = {
+              ...pendingMemberActions,
+              [u.id]: {
+                action: actionName,
+                targetUserId: u.id,
+                targetUserName: u.name,
+                targetUserRole: "Owner",
+                requestedBy: currentUser?.name || "Business Owner",
+                requestedById: currentUser?.id,
+                isOwnerToOwner: true,
+                createdAt: new Date().toISOString()
+              }
+            };
+            savePendingMemberActions(company.id, updated);
+            setPendingMemberActions(updated);
+            ctx.logAudit(`Owner ${actionName} requested`, `${u.name} ${actionName} requested by ${currentUser?.name || "Business Owner"}`);
+            alert(`Request to ${actionName} Business Owner ${u.name} sent. It will take effect once ${u.name} Accepts or Rejects it.`);
+          }
+        );
+        return;
+      }
+
       promptPasswordVerify(
         `Confirm Password to ${newStatus}`,
         `Enter your login password to ${actionName} ${u.name}'s account.`,
@@ -450,7 +516,7 @@ export default function UsersAuditModule({ ctx }) {
     }
 
     if (isManager) {
-      if (u.role === "Owner") {
+      if (isOwnerRole(u.role)) {
         alert("Managers cannot delete Business Owner accounts.");
         return;
       }
@@ -467,6 +533,7 @@ export default function UsersAuditModule({ ctx }) {
               targetUserRole: u.role,
               requestedBy: currentUser?.name || "Manager",
               requestedById: currentUser?.id,
+              isOwnerToOwner: false,
               createdAt: new Date().toISOString()
             }
           };
@@ -480,6 +547,34 @@ export default function UsersAuditModule({ ctx }) {
     }
 
     if (isOwner) {
+      if (isOwnerRole(u.role)) {
+        // Business Owner deleting ANOTHER Business Owner -> Requires target Owner's accept/reject!
+        promptPasswordVerify(
+          "Confirm Password to Request Deletion of Owner",
+          `Enter your login password to submit a deletion request to Business Owner ${u.name}.`,
+          async () => {
+            const updated = {
+              ...pendingMemberActions,
+              [u.id]: {
+                action: "delete",
+                targetUserId: u.id,
+                targetUserName: u.name,
+                targetUserRole: "Owner",
+                requestedBy: currentUser?.name || "Business Owner",
+                requestedById: currentUser?.id,
+                isOwnerToOwner: true,
+                createdAt: new Date().toISOString()
+              }
+            };
+            savePendingMemberActions(company.id, updated);
+            setPendingMemberActions(updated);
+            ctx.logAudit("Owner deletion requested", `${u.name} deletion requested by ${currentUser?.name || "Business Owner"}`);
+            alert(`Deletion request for Business Owner ${u.name} sent. It will take effect once ${u.name} Accepts or Rejects it.`);
+          }
+        );
+        return;
+      }
+
       promptPasswordVerify(
         "Confirm Password to Delete Member",
         `PERMANENT ACTION: Enter your login password to delete ${u.name} from the system.`,
@@ -490,8 +585,31 @@ export default function UsersAuditModule({ ctx }) {
               savePendingUsers(company.id, updatedPending);
               setPendingUsers(updatedPending);
             } else {
-              await deleteRow("profiles", u.id);
-              setUsers((prev) => prev.filter((x) => x.id !== u.id));
+              // Call backend API to delete user from Supabase Auth admin & profiles table
+              try {
+                await fetch("/api/auth/delete-user", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ userId: u.id, email: u.email })
+                });
+              } catch (apiErr) {
+                console.warn("[Backend Delete User API] Warning:", apiErr.message);
+              }
+
+              try {
+                await deleteUserProfile(u.id);
+              } catch (delErr) {
+                console.warn("deleteUserProfile warning:", delErr.message);
+              }
+
+              // Always remove from local users state and localStorage for instant UI update
+              setUsers((prev) => {
+                const nextUsers = prev.filter((x) => x.id !== u.id);
+                try {
+                  localStorage.setItem("erp_users", JSON.stringify(nextUsers));
+                } catch (e) {}
+                return nextUsers;
+              });
             }
 
             const updatedActions = { ...pendingMemberActions };
@@ -504,10 +622,11 @@ export default function UsersAuditModule({ ctx }) {
             savePendingRoles(company.id, updatedRoles);
             setPendingRoles(updatedRoles);
 
-            ctx.logAudit("User account deleted", `${u.name} (${u.role}) deleted by ${currentUser.name}`);
+            ctx.logAudit("User account deleted", `${u.name} (${u.role}) removed by ${currentUser.name}`);
             alert(`User account for ${u.name} has been deleted.`);
           } catch (e) {
-            alert("Could not delete user: " + e.message);
+            console.error("deleteMember failed:", e);
+            alert("Could not remove user: " + e.message);
           }
         }
       );
@@ -515,12 +634,19 @@ export default function UsersAuditModule({ ctx }) {
   };
 
   const approveMemberAction = async (u, actionItem) => {
-    if (!isOwner) return;
+    const isOwnerToOwner = actionItem?.isOwnerToOwner;
+
+    if (isOwnerToOwner && u.id !== currentUser.id) {
+      alert(`Only ${u.name} can accept or reject this request.`);
+      return;
+    }
+
+    if (!isOwnerToOwner && !isOwner) return;
     const { action } = actionItem;
 
     promptPasswordVerify(
-      `Confirm Password to Approve ${action.toUpperCase()}`,
-      `Enter your login password to approve manager's request to ${action} ${u.name}'s account.`,
+      `Confirm Password to ${isOwnerToOwner ? "Accept Request" : "Approve " + action.toUpperCase()}`,
+      `Enter your login password to ${isOwnerToOwner ? "accept" : "approve"} request to ${action} ${u.name}'s account.`,
       async () => {
         try {
           if (action === "deactivate") {
@@ -530,8 +656,29 @@ export default function UsersAuditModule({ ctx }) {
             const row = await updateRow("profiles", u.id, { status: "Active" });
             setUsers((prev) => prev.map((x) => (x.id === row.id ? row : x)));
           } else if (action === "delete") {
-            await deleteRow("profiles", u.id);
-            setUsers((prev) => prev.filter((x) => x.id !== u.id));
+            // Call backend API to delete user from Supabase Auth admin & profiles table
+            try {
+              await fetch("/api/auth/delete-user", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId: u.id, email: u.email })
+              });
+            } catch (apiErr) {
+              console.warn("[Backend Delete User API] Warning:", apiErr.message);
+            }
+
+            try {
+              await deleteUserProfile(u.id);
+            } catch (delErr) {
+              console.warn("deleteUserProfile warning:", delErr.message);
+            }
+            setUsers((prev) => {
+              const nextUsers = prev.filter((x) => x.id !== u.id);
+              try {
+                localStorage.setItem("erp_users", JSON.stringify(nextUsers));
+              } catch (e) {}
+              return nextUsers;
+            });
           }
 
           const updatedActions = { ...pendingMemberActions };
@@ -539,30 +686,48 @@ export default function UsersAuditModule({ ctx }) {
           savePendingMemberActions(company.id, updatedActions);
           setPendingMemberActions(updatedActions);
 
-          ctx.logAudit(`User ${action} approved`, `${u.name} ${action} request approved by Owner`);
-          alert(`Approved ${action} for ${u.name}.`);
+          ctx.logAudit(`User ${action} ${isOwnerToOwner ? "accepted" : "approved"}`, `${u.name} ${action} request processed`);
+          alert(`Account ${action} request accepted and processed for ${u.name}.`);
+
+          if (isOwnerToOwner && u.id === currentUser.id && (action === "deactivate" || action === "delete")) {
+            window.location.reload();
+          }
         } catch (e) {
-          alert(`Could not approve ${action}: ` + e.message);
+          alert(`Could not process ${action}: ` + e.message);
         }
       }
     );
   };
 
   const rejectMemberAction = (u, actionItem) => {
-    if (!isOwner) return;
+    const isOwnerToOwner = actionItem?.isOwnerToOwner;
+    const isRequester = currentUser?.id === actionItem?.requestedById || currentUser?.name === actionItem?.requestedBy;
+
+    if (isOwnerToOwner && u.id !== currentUser.id && !isRequester) {
+      alert(`Only ${u.name} or the requesting user can cancel/reject this request.`);
+      return;
+    }
+
+    if (!isOwnerToOwner && !isOwner && !isRequester && !isManager) return;
+
     const updatedActions = { ...pendingMemberActions };
     delete updatedActions[u.id];
     savePendingMemberActions(company.id, updatedActions);
     setPendingMemberActions(updatedActions);
 
-    ctx.logAudit(`User ${actionItem.action} request rejected`, `${u.name} ${actionItem.action} request rejected by Owner`);
-    alert(`Rejected ${actionItem.action} request for ${u.name}.`);
+    ctx.logAudit(`User ${actionItem.action} request cancelled`, `${u.name} ${actionItem.action} request cancelled/rejected`);
+    alert(`Request to ${actionItem.action} ${u.name}'s account was cancelled/rejected.`);
   };
 
-  // Combine real DB users with local pending user requests
+  // Combine real DB users with local pending user requests and current logged-in profile
+  const baseUsers = [...users];
+  if (currentUser?.id && !baseUsers.some((u) => u.id === currentUser.id)) {
+    baseUsers.push(currentUser);
+  }
+
   const displayUsers = [
-    ...users,
-    ...pendingUsers.filter((p) => !users.some((u) => u.id === p.id))
+    ...baseUsers,
+    ...pendingUsers.filter((p) => !baseUsers.some((u) => u.id === p.id))
   ];
 
   const pendingUserCount = pendingUsers.length;
@@ -570,6 +735,7 @@ export default function UsersAuditModule({ ctx }) {
   const pendingActionCount = Object.keys(pendingMemberActions).length;
   const totalPending = pendingUserCount + pendingRoleCount + pendingActionCount;
   const myPendingRoleReq = pendingRoles[currentUser?.id];
+  const myPendingMemberAction = pendingMemberActions[currentUser?.id];
 
   const filteredLog = auditLog.filter((l) => !q || l.userName?.toLowerCase().includes(q.toLowerCase()) || l.action?.toLowerCase().includes(q.toLowerCase()));
   const loginEvents = auditLog.filter((l) => l.action === "Login" || l.action === "Logout");
@@ -599,20 +765,35 @@ export default function UsersAuditModule({ ctx }) {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <Btn
-              size="sm"
-              variant="primary"
-              onClick={() => approveRoleChange(currentUser, myPendingRoleReq.requestedRole)}
-            >
+            <AcceptBtn onClick={() => approveRoleChange(currentUser, myPendingRoleReq.requestedRole)}>
               Accept Request
-            </Btn>
-            <Btn
-              size="sm"
-              variant="secondary"
-              onClick={() => rejectRoleChange(currentUser)}
-            >
+            </AcceptBtn>
+            <RejectBtn onClick={() => rejectRoleChange(currentUser)}>
               Reject
-            </Btn>
+            </RejectBtn>
+          </div>
+        </div>
+      )}
+
+      {/* Target Owner Accept/Reject Deactivate/Delete Action Banner */}
+      {myPendingMemberAction && myPendingMemberAction.isOwnerToOwner && (
+        <div
+          className="text-xs px-4 py-3 rounded-2xl mb-4 flex items-center justify-between gap-3 shadow-md border animate-bounce"
+          style={{ background: T.redWash, color: T.red, borderColor: "rgba(215,0,21,0.30)" }}
+        >
+          <div className="flex items-center gap-2 font-medium">
+            <Clock size={18} />
+            <span>
+              <b>Account Action Request:</b> {myPendingMemberAction.requestedBy} has requested to <b>{myPendingMemberAction.action.toUpperCase()}</b> your Business Owner account.
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <AcceptBtn onClick={() => approveMemberAction(currentUser, myPendingMemberAction)}>
+              Accept Request
+            </AcceptBtn>
+            <RejectBtn onClick={() => rejectMemberAction(currentUser, myPendingMemberAction)}>
+              Reject
+            </RejectBtn>
           </div>
         </div>
       )}
@@ -700,57 +881,44 @@ export default function UsersAuditModule({ ctx }) {
                             </span>
                             {roleReq.isOwnerToOwner ? (
                               u.id === currentUser.id ? (
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    onClick={() => approveRoleChange(u, roleReq.requestedRole)}
-                                    className="p-1 text-xs font-semibold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded px-2"
-                                    title="Accept Role Change"
-                                  >
+                                <div className="flex items-center gap-1.5">
+                                  <AcceptBtn onClick={() => approveRoleChange(u, roleReq.requestedRole)} title="Accept Role Change">
                                     Accept
-                                  </button>
-                                  <button
-                                    onClick={() => rejectRoleChange(u)}
-                                    className="p-1 text-xs font-semibold text-red-700 bg-red-100 hover:bg-red-200 rounded px-2"
-                                    title="Reject Role Change"
-                                  >
+                                  </AcceptBtn>
+                                  <RejectBtn onClick={() => rejectRoleChange(u)} title="Reject Role Change">
                                     Reject
-                                  </button>
+                                  </RejectBtn>
                                 </div>
                               ) : (
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-1.5">
                                   <span className="text-[10px] text-amber-700 italic">
                                     Awaiting {u.name}'s Accept/Reject
                                   </span>
                                   {currentUser.id === roleReq.requestedById && (
-                                    <button
-                                      onClick={() => rejectRoleChange(u)}
-                                      className="text-[10px] text-red-600 underline ml-1 font-medium"
-                                      title="Cancel Request"
-                                    >
+                                    <CancelBtn onClick={() => rejectRoleChange(u)} title="Cancel Request">
                                       Cancel
-                                    </button>
+                                    </CancelBtn>
                                   )}
                                 </div>
                               )
                             ) : (
-                              isOwner && (
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    onClick={() => approveRoleChange(u, roleReq.requestedRole)}
-                                    className="p-1 text-xs font-semibold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded px-1.5"
-                                    title="Approve Role"
-                                  >
-                                    Approve
-                                  </button>
-                                  <button
-                                    onClick={() => rejectRoleChange(u)}
-                                    className="p-1 text-xs font-semibold text-red-700 bg-red-100 hover:bg-red-200 rounded px-1.5"
-                                    title="Reject Role Change"
-                                  >
-                                    Reject
-                                  </button>
-                                </div>
-                              )
+                              <div className="flex items-center gap-1.5">
+                                {isOwner && (
+                                  <>
+                                    <AcceptBtn onClick={() => approveRoleChange(u, roleReq.requestedRole)} title="Approve Role">
+                                      Approve
+                                    </AcceptBtn>
+                                    <RejectBtn onClick={() => rejectRoleChange(u)} title="Reject Role Change">
+                                      Reject
+                                    </RejectBtn>
+                                  </>
+                                )}
+                                {(currentUser.id === roleReq.requestedById || currentUser.name === roleReq.requestedBy || isManager) && (
+                                  <CancelBtn onClick={() => rejectRoleChange(u)} title="Cancel Role Request">
+                                    Cancel Request
+                                  </CancelBtn>
+                                )}
+                              </div>
                             )}
                           </div>
                         )}
@@ -774,36 +942,54 @@ export default function UsersAuditModule({ ctx }) {
                     {/* Actions */}
                     <td className="px-4 py-2.5 text-right">
                       {isUserPending ? (
-                        isOwner ? (
-                          <div className="flex justify-end gap-1.5">
-                            <Btn size="sm" variant="primary" onClick={() => approveUser(u)}>
+                        <div className="flex justify-end items-center gap-1.5">
+                          {isOwner && (
+                            <AcceptBtn onClick={() => approveUser(u)}>
                               Approve User
-                            </Btn>
-                            <Btn size="sm" variant="secondary" onClick={() => rejectUser(u)}>
-                              Reject
-                            </Btn>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-amber-600 font-medium">Awaiting Confirmation</span>
-                        )
+                            </AcceptBtn>
+                          )}
+                          <CancelBtn onClick={() => rejectUser(u)} title="Cancel User Creation Request">
+                            Cancel Request
+                          </CancelBtn>
+                        </div>
                       ) : (
                         <div className="flex items-center justify-end gap-1.5 flex-wrap">
                           {pendingMemberAction ? (
-                            <div className="flex items-center gap-1.5 text-xs">
+                            <div className="flex items-center gap-1.5 text-xs flex-wrap">
                               <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold border border-amber-300">
                                 Req: {pendingMemberAction.action} ({pendingMemberAction.requestedBy})
                               </span>
-                              {isOwner ? (
-                                <div className="flex items-center gap-1">
-                                  <Btn size="sm" variant="primary" onClick={() => approveMemberAction(u, pendingMemberAction)}>
-                                    Approve
-                                  </Btn>
-                                  <Btn size="sm" variant="secondary" onClick={() => rejectMemberAction(u, pendingMemberAction)}>
-                                    Reject
-                                  </Btn>
-                                </div>
+                              {pendingMemberAction.isOwnerToOwner ? (
+                                u.id === currentUser.id ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <AcceptBtn onClick={() => approveMemberAction(u, pendingMemberAction)} title="Accept Request">
+                                      Accept
+                                    </AcceptBtn>
+                                    <RejectBtn onClick={() => rejectMemberAction(u, pendingMemberAction)} title="Cancel Request">
+                                      Reject
+                                    </RejectBtn>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] text-amber-700 italic">
+                                      Awaiting {u.name}'s Accept/Reject
+                                    </span>
+                                    <CancelBtn onClick={() => rejectMemberAction(u, pendingMemberAction)} title="Cancel Request">
+                                      Cancel Request
+                                    </CancelBtn>
+                                  </div>
+                                )
                               ) : (
-                                <span className="text-xs text-amber-700 italic">Awaiting Owner</span>
+                                <div className="flex items-center gap-1.5">
+                                  {isOwner && (
+                                    <AcceptBtn onClick={() => approveMemberAction(u, pendingMemberAction)}>
+                                      Approve
+                                    </AcceptBtn>
+                                  )}
+                                  <CancelBtn onClick={() => rejectMemberAction(u, pendingMemberAction)} title="Cancel Action Request">
+                                    Cancel Request
+                                  </CancelBtn>
+                                </div>
                               )}
                             </div>
                           ) : (
@@ -812,8 +998,8 @@ export default function UsersAuditModule({ ctx }) {
                                 size="sm"
                                 variant={u.status === "Active" ? "danger" : "secondary"}
                                 onClick={() => toggleStatus(u)}
-                                disabled={u.id === currentUser.id || (isManager && u.role === "Owner")}
-                                title={isManager && u.role === "Owner" ? "Managers cannot modify Owner accounts" : ""}
+                                disabled={isViewer || u.id === currentUser.id || (isManager && isOwnerRole(u.role))}
+                                title={isViewer ? "Viewers cannot modify accounts" : (isManager && isOwnerRole(u.role) ? "Managers cannot modify Owner accounts" : "")}
                               >
                                 {u.status === "Active" ? "Deactivate" : "Reactivate"}
                               </Btn>
@@ -821,8 +1007,8 @@ export default function UsersAuditModule({ ctx }) {
                                 size="sm"
                                 variant="secondary"
                                 onClick={() => deleteMember(u)}
-                                disabled={u.id === currentUser.id || (isManager && u.role === "Owner")}
-                                title={isManager && u.role === "Owner" ? "Managers cannot delete Owner accounts" : "Delete Member"}
+                                disabled={isViewer || u.id === currentUser.id || (isManager && isOwnerRole(u.role))}
+                                title={isViewer ? "Viewers cannot delete accounts" : (isManager && isOwnerRole(u.role) ? "Managers cannot delete Owner accounts" : "Delete Member")}
                                 className="!text-red-600 hover:!bg-red-50"
                               >
                                 <Trash2 size={13} />

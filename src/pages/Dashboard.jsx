@@ -23,7 +23,7 @@ import React, { useState, useMemo } from "react";
 import {
   TrendingUp, TrendingDown, IndianRupee, ShoppingCart, Wallet, Receipt,
   Boxes, AlertTriangle, Users, Truck, CheckCircle2, Lock, Mail, ArrowRight,
-  Sparkles
+  Sparkles, ShieldAlert
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, Line,
@@ -43,8 +43,8 @@ export default function Dashboard({ ctx }) {
   }, [emails]);
 
   const latestEmail = unreadEmails.length > 0 ? unreadEmails[0] : (emails && emails.length > 0 ? emails[0] : null);
-  const canSeeFinance = role === "Owner" || role === "Accountant" || role === "Manager";
-  const canSeeProfits = role === "Owner" || role === "Accountant";
+  const canSeeFinance = role === "Owner" || role === "Accountant" || role === "Manager" || role === "Viewer";
+  const canSeeProfits = role === "Owner" || role === "Accountant" || role === "Viewer";
   const canSeeSales = role === "Owner" || role === "Accountant" || role === "Sales" || role === "Manager" || role === "Viewer";
   const canSeeInventory = role === "Owner" || role === "Inventory" || role === "Manager" || role === "Viewer";
   const [rangeLabel, setRangeLabel] = useState("This month");

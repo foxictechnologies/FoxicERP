@@ -189,22 +189,7 @@ export const ROLES = {
 
   Viewer: {
     label: "Viewer (Read Only)",
-    tabs: [
-      "dashboard",
-      "inbox",
-      "sales",
-      "purchases",
-      "inventory",
-      "customers",
-      "vendors",
-      "payments",
-      "expenses",
-      "reports",
-      "analytics",
-      "users",
-      "tickets",
-      "tasks"
-    ]
+    tabs: "*"
   },
 };
 

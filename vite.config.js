@@ -4,7 +4,7 @@ import { createHostingerMailMiddleware } from "./src/server/hostingerMailService
 import { createSupabaseAuthMiddleware } from "./src/server/supabaseAuthService.js";
 
 export default defineConfig({
-  base: "./",
+  base: "/",
   plugins: [
     react(),
     {

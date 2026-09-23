@@ -129,7 +129,14 @@ export default function App() {
   // ---- 1. session bootstrap: is anyone logged in? ----
   useEffect(() => {
     if (TESTING_MODE) return; // skip real auth in testing mode
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    supabase.auth
+      .getSession()
+      .then(({ data }) => setSession(data?.session || null))
+      .catch((err) => {
+        console.error("Auth getSession error:", err);
+        setSession(null);
+      });
+
     const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
       // Ignore duplicate events for the SAME user (re-sign-in used by the
       // change-password verifier, silent token refreshes). Swapping the
@@ -139,7 +146,7 @@ export default function App() {
         return sess;
       });
     });
-    return () => sub.subscription.unsubscribe();
+    return () => sub?.subscription?.unsubscribe();
   }, []);
 
   // ---- 2 & 3. once we have a session, load the profile, then all company data ----
@@ -149,80 +156,256 @@ export default function App() {
     if (session === null) { setProfile(null); setDataLoading(false); return; }
     (async () => {
       setDataLoading(true);
-      const prof = await fetchOne("profiles", session.user.id);
-      if (!prof || prof.status !== "Active") { setProfile(null); setDataLoading(false); return; }
-      setProfile({ ...prof, email: session.user.email });
-
-      const [
-        comp,
-        prod,
-        cust,
-        vend,
-        inv,
-        pur,
-        exp,
-        pay,
-        ledger,
-        usrs,
-        logs,
-        tix,
-        tsk,
-        em,
-      ] = await Promise.all([
-        fetchOne("companies", prof.companyId),
-        fetchTable("products", "name", true),
-        fetchTable("customers", "name", true),
-        fetchTable("vendors", "name", true),
-        fetchTable("invoices"),
-        fetchTable("purchases"),
-        fetchTable("expenses"),
-        fetchTable("payments"),
-        fetchTable("stock_ledger"),
-        fetchTable("profiles", "name", true),
-        fetchTable("audit_log", "timestamp", false),
-        fetchTable("tickets", "created_at", false),
-        fetchTable("tasks", "created_at", false),
-        fetchTable("emails", "received_at", false),
-      ]);
-      setCompany(comp); setProducts(prod); setCustomers(cust); setVendors(vend);
-      setInvoices(inv); setPurchases(pur); setExpenses(exp); setPayments(pay);
-      setStockLedger(ledger);
-      setUsers(usrs);
-      setAuditLog(logs);
-      setTickets(tix);
-      let localTasks = [];
       try {
-        const storedTasks = localStorage.getItem("erp_tasks");
-        if (storedTasks) {
-          const parsed = JSON.parse(storedTasks);
-          if (Array.isArray(parsed)) localTasks = parsed;
-        }
-      } catch (e) {}
+        let prof = await fetchOne("profiles", session.user.id);
+        
+        // SELF-HEALING: If no profile exists for this session user (e.g. after changing .env to a fresh Supabase instance)
+        if (!prof) {
+          console.warn("No profile found for user in current Supabase DB. Auto-creating profile...");
+          let compList = await fetchTable("companies").catch(() => []);
+          let targetCompanyId = compList?.[0]?.id;
 
-      const taskMap = new Map();
-      localTasks.forEach((t) => { if (t?.id) taskMap.set(t.id, t); });
-      if (tsk && Array.isArray(tsk)) {
-        tsk.forEach((t) => { if (t?.id) taskMap.set(t.id, t); });
-      }
-      setTasks(Array.from(taskMap.values()));
-
-      if (em && em.length > 0) {
-        setEmails(em);
-      } else {
-        // Fetch live from Hostinger Mail API backend
-        try {
-          const syncRes = await fetch("/api/mail/sync", { method: "POST" });
-          const syncData = await syncRes.json();
-          if (syncData.success && Array.isArray(syncData.emails)) {
-            setEmails(syncData.emails);
+          if (!targetCompanyId) {
+            try {
+              const newComp = await insertRow("companies", {
+                name: "Foxic ERP Company",
+                ownerName: "Owner",
+                email: session.user.email,
+                financialYear: "2025-2026",
+                defaultGstRate: 18,
+                invoicePrefix: "INV/",
+                nextInvoiceNumber: 1
+              });
+              targetCompanyId = newComp.id;
+            } catch (cErr) {
+              console.error("Failed to auto-create company row:", cErr);
+              targetCompanyId = "c1010101-0000-0000-0000-000000000001";
+            }
           }
-        } catch (e) {
-          // ignore
+
+          const userEmail = (session.user.email || "").toLowerCase();
+          let role = session.user.user_metadata?.role;
+          if (!role) {
+            if (userEmail.includes("viewer")) role = "Viewer";
+            else if (userEmail.includes("manager")) role = "Manager";
+            else if (userEmail.includes("account")) role = "Accountant";
+            else if (userEmail.includes("sales")) role = "Sales";
+            else role = "Owner";
+          }
+
+          let name = session.user.user_metadata?.name;
+          if (!name) {
+            const rawName = userEmail.split("@")[0] || "User";
+            name = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+          }
+
+          const newProfObj = {
+            id: session.user.id,
+            companyId: targetCompanyId,
+            name: name,
+            role: role,
+            status: "Active"
+          };
+
+          try {
+            prof = await insertRow("profiles", newProfObj);
+          } catch (pErr) {
+            console.error("Failed to insert profile row to DB:", pErr);
+            prof = newProfObj;
+          }
         }
+
+        if (!prof || prof.status !== "Active") { setProfile(null); setDataLoading(false); return; }
+        setProfile({ ...prof, email: session.user.email });
+
+        let comp = await fetchOne("companies", prof.companyId).catch(() => null);
+        if (!comp) {
+          try {
+            comp = await insertRow("companies", {
+              id: prof.companyId,
+              name: "Foxic ERP Company",
+              ownerName: prof.name,
+              email: session.user.email,
+              financialYear: "2025-2026",
+              defaultGstRate: 18
+            });
+          } catch (e) {
+            comp = {
+              id: prof.companyId,
+              name: "Foxic ERP Company",
+              ownerName: prof.name,
+              email: session.user.email,
+              financialYear: "2025-2026"
+            };
+          }
+        }
+
+        const [
+          prod,
+          cust,
+          vend,
+          inv,
+          pur,
+          exp,
+          pay,
+          ledger,
+          usrs,
+          logs,
+          tix,
+          tsk,
+          em,
+        ] = await Promise.all([
+          fetchTable("products", "name", true).catch(() => []),
+          fetchTable("customers", "name", true).catch(() => []),
+          fetchTable("vendors", "name", true).catch(() => []),
+          fetchTable("invoices").catch(() => []),
+          fetchTable("purchases").catch(() => []),
+          fetchTable("expenses").catch(() => []),
+          fetchTable("payments").catch(() => []),
+          fetchTable("stock_ledger").catch(() => []),
+          fetchTable("profiles", "name", true).catch(() => []),
+          fetchTable("audit_log", "timestamp", false).catch(() => []),
+          fetchTable("tickets", "created_at", false).catch(() => []),
+          fetchTable("tasks", "created_at", false).catch(() => []),
+          fetchTable("emails", "received_at", false).catch(() => []),
+        ]);
+
+        setCompany(comp);
+        
+        const filterByCompany = (arr) => {
+          if (!arr || !Array.isArray(arr)) return [];
+          if (!prof?.companyId) return arr;
+          return arr.filter((item) => !item.companyId || item.companyId === prof.companyId);
+        };
+
+        setProducts(filterByCompany(prod));
+        setCustomers(filterByCompany(cust));
+        setVendors(filterByCompany(vend));
+        setInvoices(filterByCompany(inv));
+        setPurchases(filterByCompany(pur));
+        setPayments(filterByCompany(pay));
+        setTickets(filterByCompany(tix));
+
+        // Expenses: Supabase DB is authoritative
+        const dbExpenses = filterByCompany(exp);
+        if (exp && Array.isArray(exp)) {
+          setExpenses(dbExpenses);
+          try {
+            localStorage.setItem("erp_expenses", JSON.stringify(dbExpenses));
+          } catch (e) {}
+        } else {
+          // Fallback to localStorage only if Supabase fetch completely failed
+          let localExp = [];
+          try {
+            const storedExp = localStorage.getItem("erp_expenses");
+            if (storedExp) {
+              const parsed = JSON.parse(storedExp);
+              if (Array.isArray(parsed)) localExp = filterByCompany(parsed);
+            }
+          } catch (e) {}
+          setExpenses(localExp);
+        }
+        
+        // Users / profiles: Supabase DB is authoritative
+        const userMap = new Map();
+        const dbUsers = filterByCompany(usrs);
+
+        if (usrs && Array.isArray(usrs)) {
+          dbUsers.forEach((u) => { if (u?.id) userMap.set(u.id, u); });
+        } else {
+          // Fallback to localStorage only if Supabase returned no profiles error
+          let localUsers = [];
+          try {
+            const storedUsers = localStorage.getItem("erp_users");
+            if (storedUsers) {
+              const parsed = JSON.parse(storedUsers);
+              if (Array.isArray(parsed)) localUsers = filterByCompany(parsed);
+            }
+          } catch (e) {}
+          localUsers.forEach((u) => { if (u?.id) userMap.set(u.id, u); });
+        }
+
+        if (prof && prof.id && !userMap.has(prof.id)) {
+          userMap.set(prof.id, { ...prof, email: session.user.email });
+        }
+
+        const finalUsers = Array.from(userMap.values());
+        setUsers(finalUsers);
+        try {
+          localStorage.setItem("erp_users", JSON.stringify(finalUsers));
+        } catch (e) {}
+
+        // Audit log: Supabase DB is authoritative
+        const dbLogs = filterByCompany(logs);
+        if (logs && Array.isArray(logs)) {
+          setAuditLog(dbLogs);
+          try {
+            localStorage.setItem("erp_audit_log", JSON.stringify(dbLogs));
+          } catch (e) {}
+        } else {
+          let localLogs = [];
+          try {
+            const storedLogs = localStorage.getItem("erp_audit_log");
+            if (storedLogs) {
+              const parsed = JSON.parse(storedLogs);
+              if (Array.isArray(parsed)) localLogs = filterByCompany(parsed);
+            }
+          } catch (e) {}
+          setAuditLog(localLogs);
+        }
+
+        // Tasks: Supabase DB is authoritative
+        const dbTasks = filterByCompany(tsk);
+        if (tsk && Array.isArray(tsk)) {
+          setTasks(dbTasks);
+          try {
+            localStorage.setItem("erp_tasks", JSON.stringify(dbTasks));
+          } catch (e) {}
+        } else {
+          let localTasks = [];
+          try {
+            const storedTasks = localStorage.getItem("erp_tasks");
+            if (storedTasks) {
+              const parsed = JSON.parse(storedTasks);
+              if (Array.isArray(parsed)) localTasks = filterByCompany(parsed);
+            }
+          } catch (e) {}
+          setTasks(localTasks);
+        }
+
+        if (em && em.length > 0) {
+          setEmails(em);
+        } else {
+          try {
+            const syncRes = await fetch("/api/mail/sync", { method: "POST" });
+            const syncData = await syncRes.json();
+            if (syncData.success && Array.isArray(syncData.emails)) {
+              setEmails(syncData.emails);
+            } else {
+              setEmails([]);
+            }
+          } catch (e) {
+            setEmails([]);
+          }
+        }
+      } catch (err) {
+        console.error("Error bootstrapping company data:", err);
+      } finally {
+        setDataLoading(false);
       }
-      setDataLoading(false);
     })();
   }, [session]);
+
+  // Sync users to local storage for offline resilience
+  useEffect(() => {
+    try {
+      if (users && users.length > 0) {
+        localStorage.setItem("erp_users", JSON.stringify(users));
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [users]);
 
   // Sync tasks to local storage for offline resilience
   useEffect(() => {
@@ -234,6 +417,116 @@ export default function App() {
       // ignore
     }
   }, [tasks]);
+
+  // Sync expenses to local storage for offline resilience and viewer access
+  useEffect(() => {
+    try {
+      if (expenses && expenses.length > 0) {
+        localStorage.setItem("erp_expenses", JSON.stringify(expenses));
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [expenses]);
+
+  // Sync audit log to local storage for offline resilience & Manager access
+  useEffect(() => {
+    try {
+      if (auditLog && auditLog.length > 0) {
+        localStorage.setItem("erp_audit_log", JSON.stringify(auditLog));
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [auditLog]);
+
+  // =====================================================
+  // REAL-TIME AUDIT LOG UPDATES
+  // =====================================================
+  useEffect(() => {
+    if (!profile?.companyId) return;
+
+    const channel = supabase
+      .channel(`audit_log-${profile.companyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "audit_log",
+          filter: `company_id=eq.${profile.companyId}`,
+        },
+        (payload) => {
+          const newEntry = {
+            id: payload.new.id,
+            companyId: payload.new.company_id,
+            userId: payload.new.user_id,
+            userName: payload.new.user_name,
+            role: payload.new.role,
+            action: payload.new.action,
+            details: payload.new.details,
+            timestamp: payload.new.timestamp
+          };
+          setAuditLog((prev) => {
+            if (prev.some((l) => l.id === newEntry.id)) return prev;
+            return [newEntry, ...prev];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.companyId]);
+
+  // =====================================================
+  // REAL-TIME PROFILES / TEAM MEMBERS UPDATES
+  // =====================================================
+  useEffect(() => {
+    if (!profile?.companyId) return;
+
+    const channel = supabase
+      .channel(`profiles-${profile.companyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "profiles",
+          filter: `company_id=eq.${profile.companyId}`,
+        },
+        (payload) => {
+          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+            const row = payload.new;
+            const updatedUser = {
+              id: row.id,
+              companyId: row.company_id,
+              name: row.name,
+              role: row.role,
+              status: row.status,
+              createdAt: row.created_at
+            };
+            setUsers((prev) => {
+              const existingIndex = prev.findIndex((u) => u.id === updatedUser.id);
+              if (existingIndex >= 0) {
+                const next = [...prev];
+                next[existingIndex] = { ...next[existingIndex], ...updatedUser };
+                return next;
+              }
+              return [...prev, updatedUser];
+            });
+          } else if (payload.eventType === "DELETE") {
+            setUsers((prev) => prev.filter((u) => u.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.companyId]);
 
   // =====================================================
 // REAL-TIME TICKET UPDATES
@@ -452,10 +745,16 @@ useEffect(() => {
     } catch (e) { alert("Could not load sample data: " + e.message); }
   };
 
-  // Which sidebar tabs the current role can see (UI convenience — see the
-  // note in lib/constants.js about ROLES; the real security is RLS).
-  const role = profile?.role || "Sales";
-  const visibleTabs = ROLES[role].tabs === "*" ? NAV.map((n) => n.id) : ROLES[role].tabs;
+  // Which sidebar tabs the current role can see
+  const rawRole = profile?.role || "Sales";
+  const role = rawRole === "Operations Manager" ? "Manager" :
+               rawRole === "Business Owner" ? "Owner" :
+               rawRole === "Sales Employee" ? "Sales" :
+               rawRole === "Inventory Manager" ? "Inventory" :
+               rawRole === "Viewer (Read Only)" ? "Viewer" : rawRole;
+
+  const roleObj = ROLES[role] || ROLES["Sales"];
+  const visibleTabs = roleObj.tabs === "*" ? NAV.map((n) => n.id) : (roleObj.tabs || NAV.map((n) => n.id));
   useEffect(() => { if (!visibleTabs.includes(tab)) setTab(visibleTabs[0]); }, [role]); // eslint-disable-line
 
   const handleSignOut = async () => { await logAudit("Logout", `${profile.name} signed out`); await supabase.auth.signOut(); };
