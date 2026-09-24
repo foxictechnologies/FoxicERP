@@ -52,7 +52,7 @@ export default function PaymentsModule({ ctx }) {
 
   return (
     <div>
-      <SectionHeader title="Payments" subtitle="Record and track receipts and payments" action={!isViewer ? <Btn icon={Plus} onClick={() => { setForm(blank()); setShowForm(true); }} disabled={openInvoices.length === 0}>Record Payment</Btn> : null} />
+      <SectionHeader title="Payments" subtitle="Record and track receipts and payments" action={!isViewer && ctx.role !== "Sales" ? <Btn icon={Plus} onClick={() => { setForm(blank()); setShowForm(true); }} disabled={openInvoices.length === 0}>Record Payment</Btn> : null} />
       <Card>
         {payments.length === 0 ? <EmptyState icon={CreditCard} title="No payments recorded" /> : (
           <div className="overflow-x-auto">

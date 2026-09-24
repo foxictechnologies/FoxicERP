@@ -208,7 +208,7 @@ create policy "finance write purchases" on purchases for all using (company_id =
 create policy "finance read expenses" on expenses for select using (company_id = my_company() and my_role() in ('Owner','Accountant','Manager','Viewer'));
 create policy "finance write expenses" on expenses for all using (company_id = my_company() and my_role() in ('Owner','Accountant'));
 
-create policy "finance read payments" on payments for select using (company_id = my_company() and my_role() in ('Owner','Accountant','Manager','Viewer'));
+create policy "finance read payments" on payments for select using (company_id = my_company() and my_role() in ('Owner','Accountant','Manager','Sales','Viewer'));
 create policy "finance write payments" on payments for all using (company_id = my_company() and my_role() in ('Owner','Accountant'));
 
 -- STOCK LEDGER: Owner and Inventory only

@@ -19,7 +19,7 @@ using (company_id = my_company() and my_role() in ('Owner', 'Accountant', 'Manag
 -- 3. PAYMENTS: Allow Viewer & Manager to view payments
 drop policy if exists "finance read payments" on payments;
 create policy "finance read payments" on payments for select 
-using (company_id = my_company() and my_role() in ('Owner', 'Accountant', 'Manager', 'Viewer'));
+using (company_id = my_company() and my_role() in ('Owner', 'Accountant', 'Manager', 'Sales', 'Viewer'));
 
 -- 4. INVOICES: Allow Viewer & Manager to view invoices
 drop policy if exists "read invoices" on invoices;

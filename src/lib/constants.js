@@ -170,6 +170,7 @@ export const ROLES = {
     tabs: [
       "dashboard",
       "sales",
+      "payments",
       "customers",
       "analytics",
       "tasks"
