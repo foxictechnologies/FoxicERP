@@ -10,7 +10,7 @@ const TABLE_COLUMNS = {
   vendors: ["id","companyId","name","contact","phone","email","gstin","state","address","bankName","bankAccount","bankIfsc","paymentTerms"],
   invoices: ["id","companyId","number","date","customerId","dueDate","status","items","paidAmount","createdBy","attachmentUrl","taxType","pendingEdit","deletePermission"],
   purchases: ["id","companyId","number","date","vendorId","status","items","createdBy","attachmentUrl","taxType"],
-  payments: ["id","companyId","date","type","partyId","refId","refNumber","amount","method","notes","createdBy","attachmentUrl"],
+  payments: ["id","companyId","date","type","partyId","refId","refNumber","amount","method","notes","createdBy","attachmentUrl","approvalStatus","pendingApproval"],
   expenses: ["id","companyId","date","category","amount","vendor","method","description","createdBy","attachmentUrl"],
   stock_ledger: ["id","companyId","productId","date","type","qty","refId"],
   audit_log: ["id","companyId","userId","userName","role","action","details","timestamp"],

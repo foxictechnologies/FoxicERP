@@ -9,10 +9,10 @@
  */
 
 import React, { useState } from "react";
-import { Plus, CreditCard, AlertTriangle } from "lucide-react";
+import { Plus, CreditCard, AlertTriangle, Clock } from "lucide-react";
 import { T } from "../lib/constants";
 import { INR, fmtDate, uid, todayISO } from "../lib/format";
-import { Card, Badge, Btn, Field, Input, Select, Modal, EmptyState, SectionHeader } from "../components/ui";
+import { Card, Badge, Btn, Field, Input, Select, Modal, EmptyState, SectionHeader, AcceptBtn, RejectBtn } from "../components/ui";
 import FileInput from "../components/FileInput";
 import AttachmentLink from "../components/AttachmentLink";
 import { insertRow, updateRow, uploadAttachment } from "../lib/db";
@@ -21,6 +21,8 @@ import { Save } from "lucide-react";
 export default function PaymentsModule({ ctx }) {
   const { payments, setPayments, invoices, setInvoices, customers } = ctx;
   const isViewer = ctx.role === "Viewer";
+  const isSales = ctx.role === "Sales";
+  const isApprover = ctx.role === "Owner" || ctx.role === "Manager";
   const [showForm, setShowForm] = useState(false);
   const [file, setFile] = useState(null);
   const openInvoices = invoices.filter((i) => i.status === "Sent" || i.status === "Partially Paid" || i.status === "Overdue");
@@ -41,7 +43,19 @@ export default function PaymentsModule({ ctx }) {
       const status = newPaid >= totals.grandTotal ? "Paid" : "Partially Paid";
       let attachmentUrl = null;
       if (file) attachmentUrl = await uploadAttachment(file, ctx.company.id);
-      const row = await insertRow("payments", { ...form, amount, attachmentUrl, companyId: ctx.company.id, partyId: inv.customerId, refNumber: inv.number, createdBy: ctx.currentUser.id });
+      const pendingApproval = isSales ? {
+        requestedBy: ctx.currentUser?.name || "Sales Employee",
+        requestedById: ctx.currentUser?.id,
+        createdAt: new Date().toISOString()
+      } : null;
+      const row = await insertRow("payments", { ...form, amount, attachmentUrl, companyId: ctx.company.id, partyId: inv.customerId, refNumber: inv.number, createdBy: ctx.currentUser.id, approvalStatus: isSales ? "Pending" : "Approved", pendingApproval });
+      if (isSales) {
+        setPayments((prev) => [row, ...prev]);
+        ctx.logAudit("Payment approval requested", `${INR(amount)} against ${inv.number}`);
+        alert("Payment request sent to Owner/Manager for approval.");
+        setShowForm(false);
+        return;
+      }
       const updatedInv = await updateRow("invoices", inv.id, { status, paidAmount: newPaid });
       setInvoices((prev) => prev.map((i) => i.id === updatedInv.id ? updatedInv : i));
       setPayments((prev) => [row, ...prev]);
@@ -50,29 +64,69 @@ export default function PaymentsModule({ ctx }) {
     } catch (e) { alert("Could not record payment: " + e.message); }
   };
 
+  const approvePayment = async (payment) => {
+    if (!isApprover || payment.approvalStatus !== "Pending") return;
+    const inv = invoices.find((item) => item.id === payment.refId);
+    if (!inv || inv.status === "Paid" || inv.status === "Cancelled") {
+      alert("This invoice is no longer eligible for this payment approval.");
+      return;
+    }
+    const totals = ctx.invoiceTotals(inv);
+    const already = inv.paidAmount || 0;
+    const amount = Number(payment.amount);
+    if (amount <= 0 || amount > Math.max(0, totals.grandTotal - already)) {
+      alert("This payment exceeds the invoice's current outstanding balance.");
+      return;
+    }
+    try {
+      const newPaid = already + amount;
+      const status = newPaid >= totals.grandTotal ? "Paid" : "Partially Paid";
+      const updatedInv = await updateRow("invoices", inv.id, { status, paidAmount: newPaid });
+      const updatedPayment = await updateRow("payments", payment.id, { approvalStatus: "Approved", pendingApproval: null });
+      setInvoices((prev) => prev.map((item) => item.id === updatedInv.id ? updatedInv : item));
+      setPayments((prev) => prev.map((item) => item.id === updatedPayment.id ? updatedPayment : item));
+      ctx.logAudit("Payment approval accepted", `${INR(amount)} against ${inv.number}`);
+      alert(`Payment approved for ${inv.number}.`);
+    } catch (e) { alert("Could not approve payment: " + e.message); }
+  };
+
+  const rejectPayment = async (payment) => {
+    if (!isApprover || payment.approvalStatus !== "Pending") return;
+    try {
+      const updated = await updateRow("payments", payment.id, { approvalStatus: "Rejected", pendingApproval: null });
+      setPayments((prev) => prev.map((item) => item.id === updated.id ? updated : item));
+      ctx.logAudit("Payment approval rejected", `${INR(payment.amount)} against ${payment.refNumber}`);
+      alert(`Payment rejected for ${payment.refNumber}.`);
+    } catch (e) { alert("Could not reject payment: " + e.message); }
+  };
+
+  const pendingCount = payments.filter((payment) => payment.approvalStatus === "Pending").length;
+
   return (
     <div>
-      <SectionHeader title="Payments" subtitle="Record and track receipts and payments" action={!isViewer && ctx.role !== "Sales" ? <Btn icon={Plus} onClick={() => { setForm(blank()); setShowForm(true); }} disabled={openInvoices.length === 0}>Record Payment</Btn> : null} />
+      <SectionHeader title="Payments" subtitle="Record and track receipts and payments" action={!isViewer && ["Owner", "Accountant", "Sales"].includes(ctx.role) ? <Btn icon={Plus} onClick={() => { setForm(blank()); setShowForm(true); }} disabled={openInvoices.length === 0}>{isSales ? "Request Payment Approval" : "Record Payment"}</Btn> : null} />
+      {isApprover && pendingCount > 0 && <div className="text-xs px-4 py-3 rounded-2xl mb-4 flex items-center gap-2" style={{ background: T.amberWash, color: T.amber, border: "1px solid rgba(176,109,0,0.20)" }}><Clock size={16} /><b>{pendingCount} payment approval request{pendingCount > 1 ? "s" : ""} waiting for your decision.</b></div>}
       <Card>
         {payments.length === 0 ? <EmptyState icon={CreditCard} title="No payments recorded" /> : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>{["Date", "Type", "Party", "Reference", "Method", "Amount", "Proof"].map((h) => <th key={h} className="text-left px-4 py-2.5 text-xs font-medium" style={{ color: T.inkFaint }}>{h}</th>)}</tr></thead>
+              <thead><tr style={{ borderBottom: `1px solid ${T.border}` }}>{["Date", "Type", "Party", "Reference", "Method", "Amount", "Proof", isApprover ? "Approval" : null].filter(Boolean).map((h) => <th key={h} className="text-left px-4 py-2.5 text-xs font-medium" style={{ color: T.inkFaint }}>{h}</th>)}</tr></thead>
               <tbody>{payments.map((p) => { const cust = customers.find((c) => c.id === p.partyId); return (
                 <tr key={p.id} style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
                   <td className="px-4 py-2.5" style={{ color: T.inkSoft }}>{fmtDate(p.date)}</td>
-                  <td className="px-4 py-2.5"><Badge tone={p.type === "receipt" ? "green" : "amber"}>{p.type === "receipt" ? "Receipt" : "Payment"}</Badge></td>
+                  <td className="px-4 py-2.5"><Badge tone={p.approvalStatus === "Pending" ? "amber" : p.approvalStatus === "Rejected" ? "red" : p.type === "receipt" ? "green" : "amber"}>{p.approvalStatus === "Pending" ? "Pending Approval" : p.approvalStatus === "Rejected" ? "Rejected" : p.type === "receipt" ? "Receipt" : "Payment"}</Badge></td>
                   <td className="px-4 py-2.5">{cust?.name || "—"}</td>
                   <td className="px-4 py-2.5" style={{ color: T.navy }}>{p.refNumber}</td>
                   <td className="px-4 py-2.5" style={{ color: T.inkFaint }}>{p.method}</td>
                   <td className="px-4 py-2.5 font-medium">{INR(p.amount)}</td>
                   <td className="px-4 py-2.5"><AttachmentLink path={p.attachmentUrl} label="Proof" /></td>
+                  {isApprover && <td className="px-4 py-2.5"><div className="flex gap-1.5 items-center">{p.approvalStatus === "Pending" ? <><AcceptBtn onClick={() => approvePayment(p)}>Approve</AcceptBtn><RejectBtn onClick={() => rejectPayment(p)}>Reject</RejectBtn></> : <span className="text-xs" style={{ color: T.inkFaint }}>{p.approvalStatus || "Approved"}</span>}</div></td>}
                 </tr>); })}</tbody>
             </table>
           </div>
         )}
       </Card>
-      <Modal open={showForm} onClose={() => setShowForm(false)} title="Record Payment">
+      <Modal open={showForm} onClose={() => setShowForm(false)} title={isSales ? "Request Payment Approval" : "Record Payment"}>
         {openInvoices.length === 0 ? <EmptyState icon={AlertTriangle} title="No open invoices to receive payment against" /> : (<>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Invoice" required><Select value={form.refId} onChange={(e) => setForm({ ...form, refId: e.target.value })}>{openInvoices.map((i) => <option key={i.id} value={i.id}>{i.number} — {ctx.getCustomer(i.customerId)?.name}</option>)}</Select></Field>
@@ -82,7 +136,7 @@ export default function PaymentsModule({ ctx }) {
           </div>
           <Field label="Notes"><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional reference note" /></Field>
           <FileInput label="Attach payment proof (screenshot, receipt, cheque copy)" fileName={file?.name} onFileSelected={setFile} />
-          <div className="flex justify-end gap-2 mt-4"><Btn variant="secondary" onClick={() => setShowForm(false)}>Cancel</Btn><Btn icon={Save} onClick={submit}>Save payment</Btn></div>
+          <div className="flex justify-end gap-2 mt-4"><Btn variant="secondary" onClick={() => setShowForm(false)}>Cancel</Btn><Btn icon={Save} onClick={submit}>{isSales ? "Send for approval" : "Save payment"}</Btn></div>
         </>)}
       </Modal>
     </div>

@@ -83,6 +83,7 @@ create table payments (
   date date not null, type text, party_id uuid, ref_id uuid, ref_number text,
   amount numeric not null, method text, notes text,
   attachment_url text,
+  approval_status text not null default 'Approved', pending_approval jsonb,
   created_by uuid references profiles(id), created_at timestamptz default now()
 );
 
@@ -210,6 +211,11 @@ create policy "finance write expenses" on expenses for all using (company_id = m
 
 create policy "finance read payments" on payments for select using (company_id = my_company() and my_role() in ('Owner','Accountant','Manager','Sales','Viewer'));
 create policy "finance write payments" on payments for all using (company_id = my_company() and my_role() in ('Owner','Accountant'));
+create policy "sales submits payment approvals" on payments for insert
+with check (company_id = my_company() and my_role() = 'Sales' and approval_status = 'Pending');
+create policy "owner manager approve payments" on payments for update
+using (company_id = my_company() and my_role() in ('Owner','Manager') and approval_status = 'Pending')
+with check (company_id = my_company() and my_role() in ('Owner','Manager'));
 
 -- STOCK LEDGER: Owner and Inventory only
 create policy "inventory read ledger" on stock_ledger for select using (company_id = my_company() and my_role() in ('Owner','Inventory'));

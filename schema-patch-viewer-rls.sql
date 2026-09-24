@@ -20,6 +20,15 @@ using (company_id = my_company() and my_role() in ('Owner', 'Accountant', 'Manag
 drop policy if exists "finance read payments" on payments;
 create policy "finance read payments" on payments for select 
 using (company_id = my_company() and my_role() in ('Owner', 'Accountant', 'Manager', 'Sales', 'Viewer'));
+alter table payments add column if not exists approval_status text not null default 'Approved';
+alter table payments add column if not exists pending_approval jsonb;
+drop policy if exists "sales submits payment approvals" on payments;
+create policy "sales submits payment approvals" on payments for insert
+with check (company_id = my_company() and my_role() = 'Sales' and approval_status = 'Pending');
+drop policy if exists "owner manager approve payments" on payments;
+create policy "owner manager approve payments" on payments for update
+using (company_id = my_company() and my_role() in ('Owner','Manager') and approval_status = 'Pending')
+with check (company_id = my_company() and my_role() in ('Owner','Manager'));
 
 -- 4. INVOICES: Allow Viewer & Manager to view invoices
 drop policy if exists "read invoices" on invoices;
