@@ -711,7 +711,11 @@ useEffect(() => {
   const invoicePaid = useCallback((inv) => inv.status === "Paid" ? invoiceTotals(inv).grandTotal : (inv.status === "Cancelled" ? 0 : (inv.paidAmount || 0)), [invoiceTotals]);
   const invoiceBalance = useCallback((inv) => (inv.status === "Cancelled" || inv.status === "Draft") ? 0 : Math.max(0, invoiceTotals(inv).grandTotal - invoicePaid(inv)), [invoiceTotals, invoicePaid]);
   const customerOutstanding = useCallback((custId) => invoices.filter((i) => i.customerId === custId && i.status !== "Draft" && i.status !== "Cancelled").reduce((s, i) => s + invoiceBalance(i), 0), [invoices, invoiceBalance]);
-  const purchaseTotal = useCallback((pur) => pur.items.reduce((s, it) => { const prod = getProduct(it.productId); const gross = it.qty * it.rate; const gst = prod ? (gross * prod.gstRate) / 100 : 0; return s + gross + gst; }, 0), [getProduct]);
+  const purchaseTotal = useCallback((pur) => {
+    if (!pur || !pur.items) return 0;
+    const vendor = getVendor(pur.vendorId);
+    return computeInvoiceTotals(pur.items, products, company?.state, vendor?.state, pur.taxType || "auto").grandTotal;
+  }, [products, company, getVendor]);
   const vendorOutstanding = useCallback((vendorId) => purchases.filter((p) => p.vendorId === vendorId && p.status !== "Paid").reduce((s, p) => s + purchaseTotal(p), 0), [purchases, purchaseTotal]);
 
   // Writes a stock_ledger row AND updates the product's currentStock.

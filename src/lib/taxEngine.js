@@ -45,7 +45,9 @@ export function computeInvoiceTotals(items, products, companyState, customerStat
     }
     lineDiscount = Math.min(lineDiscount, gross);
     const lineTaxable = gross - lineDiscount;
-    const gstRate = prod.gstRate || 0;
+    const gstRate = (it.gstRate !== undefined && it.gstRate !== null && it.gstRate !== "")
+      ? Number(it.gstRate)
+      : (prod.gstRate || 0);
     let lc = 0, ls = 0, li = 0;
     if (interState) li = (lineTaxable * gstRate) / 100;
     else { lc = (lineTaxable * gstRate) / 200; ls = (lineTaxable * gstRate) / 200; }
