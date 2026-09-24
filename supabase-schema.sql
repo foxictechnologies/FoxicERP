@@ -66,6 +66,7 @@ create table invoices (
   status text default 'Draft', items jsonb not null, paid_amount numeric default 0,
   attachment_url text, tax_type text default 'auto',
   pending_edit jsonb,
+  delete_permission boolean not null default false,
   created_by uuid references profiles(id), created_at timestamptz default now()
 );
 
@@ -196,7 +197,7 @@ create policy "finance write vendors" on vendors for all using (company_id = my_
 create policy "read invoices" on invoices for select using (company_id = my_company() and my_role() in ('Owner','Accountant','Sales','Manager','Viewer'));
 create policy "write invoices" on invoices for insert with check (company_id = my_company() and my_role() in ('Owner','Accountant','Sales'));
 create policy "update invoices" on invoices for update using (company_id = my_company() and my_role() in ('Owner','Accountant','Sales','Manager'));
-create policy "owner deletes cancelled invoices" on invoices for delete using (company_id = my_company() and my_role() = 'Owner' and status = 'Cancelled');
+create policy "authorized users delete cancelled invoices" on invoices for delete using (company_id = my_company() and status = 'Cancelled' and (my_role() in ('Owner','Manager') or (my_role() = 'Sales' and delete_permission = true)));
 
 -- PURCHASES / EXPENSES / PAYMENTS:
 create policy "finance read purchases" on purchases for select using (company_id = my_company() and my_role() in ('Owner','Accountant','Manager','Viewer'));

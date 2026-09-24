@@ -13,7 +13,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Plus, Search, Edit2, XCircle, Trash2, FileText, Paperclip, Clock, ShieldAlert } from "lucide-react";
+import { Plus, Search, Edit2, XCircle, Trash2, ShieldCheck, FileText, Paperclip, Clock, ShieldAlert } from "lucide-react";
 import { T } from "../lib/constants";
 import { INR, fmtDate, uid } from "../lib/format";
 import { Card, Badge, Btn, EmptyState, SectionHeader, statusTone, AcceptBtn, RejectBtn, CancelBtn } from "../components/ui";
@@ -260,8 +260,9 @@ export default function SalesModule({ ctx }) {
   };
 
   const deleteInvoice = async (inv) => {
-    if (!isOwner) {
-      alert("Only the Business Owner can delete invoices.");
+    const canDelete = isOwner || isManager || (role === "Sales" && inv.deletePermission === true);
+    if (!canDelete) {
+      alert("Owner or Manager permission is required before Sales can delete this invoice.");
       return;
     }
     if (inv.status !== "Cancelled") {
@@ -277,6 +278,19 @@ export default function SalesModule({ ctx }) {
       ctx.logAudit("Invoice deleted", `${inv.number} (cancelled)`);
     } catch (e) {
       alert("Could not delete invoice: " + e.message);
+    }
+  };
+
+  const toggleDeletePermission = async (inv) => {
+    if (!isApprover || inv.status !== "Cancelled") return;
+    const nextPermission = !inv.deletePermission;
+    try {
+      const updated = await updateRow("invoices", inv.id, { deletePermission: nextPermission });
+      const row = updated?.id ? updated : { ...inv, deletePermission: nextPermission };
+      setInvoices((prev) => prev.map((item) => item.id === inv.id ? row : item));
+      ctx.logAudit(nextPermission ? "Invoice delete permission granted" : "Invoice delete permission revoked", `${inv.number} for Sales`);
+    } catch (e) {
+      alert("Could not update delete permission: " + e.message);
     }
   };
 
@@ -320,7 +334,8 @@ export default function SalesModule({ ctx }) {
                             {pending && isApprover && <><AcceptBtn onClick={() => applyApprovedEdit(inv.id)}>Accept</AcceptBtn><RejectBtn onClick={() => rejectEditRequest(inv.id)}>Reject</RejectBtn></>}
                             {pending && !isApprover && <CancelBtn onClick={() => cancelEditRequest(inv.id)} title="Cancel edit request" />}
                             {inv.status !== "Cancelled" && <button title="Cancel invoice" onClick={() => cancelInvoice(inv)} className="p-1.5 rounded-md hover:bg-gray-100"><XCircle size={14} color={T.red} /></button>}
-                            {isOwner && inv.status === "Cancelled" && <button title="Delete cancelled invoice" onClick={() => deleteInvoice(inv)} className="p-1.5 rounded-md hover:bg-gray-100"><Trash2 size={14} color={T.red} /></button>}
+                            {inv.status === "Cancelled" && isApprover && <button title={inv.deletePermission ? "Revoke Sales delete permission" : "Allow Sales to delete"} onClick={() => toggleDeletePermission(inv)} className="p-1.5 rounded-md hover:bg-gray-100"><ShieldCheck size={14} color={inv.deletePermission ? T.emerald : T.inkSoft} /></button>}
+                            {inv.status === "Cancelled" && (isOwner || isManager || (role === "Sales" && inv.deletePermission === true)) && <button title="Delete cancelled invoice" onClick={() => deleteInvoice(inv)} className="p-1.5 rounded-md hover:bg-gray-100"><Trash2 size={14} color={T.red} /></button>}
                           </div>
                         )}
                       </td>

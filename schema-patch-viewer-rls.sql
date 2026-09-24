@@ -28,12 +28,14 @@ using (company_id = my_company() and my_role() in ('Owner', 'Accountant', 'Sales
 
 -- 4b. INVOICES: Managers can apply edits accepted from Sales requests.
 alter table invoices add column if not exists pending_edit jsonb;
+alter table invoices add column if not exists delete_permission boolean not null default false;
 drop policy if exists "update invoices" on invoices;
 create policy "update invoices" on invoices for update
 using (company_id = my_company() and my_role() in ('Owner', 'Accountant', 'Sales', 'Manager'));
 drop policy if exists "owner deletes cancelled invoices" on invoices;
-create policy "owner deletes cancelled invoices" on invoices for delete
-using (company_id = my_company() and my_role() = 'Owner' and status = 'Cancelled');
+drop policy if exists "authorized users delete cancelled invoices" on invoices;
+create policy "authorized users delete cancelled invoices" on invoices for delete
+using (company_id = my_company() and status = 'Cancelled' and (my_role() in ('Owner','Manager') or (my_role() = 'Sales' and delete_permission = true)));
 
 -- 5. VENDORS: Allow Viewer & Manager to view vendors
 drop policy if exists "finance read vendors" on vendors;
