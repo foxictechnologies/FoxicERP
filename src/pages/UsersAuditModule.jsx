@@ -170,7 +170,13 @@ export default function UsersAuditModule({ ctx }) {
           name: customForm.name.trim()
         })
       });
-      const data = await resp.json();
+      const text = await resp.text();
+      let data = {};
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        throw new Error(`Server API returned non-JSON response (${resp.status}). Make sure backend API is configured on Vercel.`);
+      }
       if (!resp.ok || !data.success) {
         throw new Error(data.error || "Failed to create Auth user via backend API");
       }

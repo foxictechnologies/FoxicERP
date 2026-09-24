@@ -58,7 +58,9 @@ export default function LoginScreen({ onLoggedIn }) {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ email: email.trim() })
             });
-            const confirmData = await confirmRes.json();
+            const confirmText = await confirmRes.text();
+            let confirmData = {};
+            try { confirmData = JSON.parse(confirmText); } catch (e) {}
             if (confirmData.success) {
               // Retry login automatically after confirmation
               const retry = await supabase.auth.signInWithPassword({
