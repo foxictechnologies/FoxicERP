@@ -26,6 +26,11 @@ drop policy if exists "read invoices" on invoices;
 create policy "read invoices" on invoices for select 
 using (company_id = my_company() and my_role() in ('Owner', 'Accountant', 'Sales', 'Manager', 'Viewer'));
 
+-- 4b. INVOICES: Managers can apply edits accepted from Sales requests.
+drop policy if exists "update invoices" on invoices;
+create policy "update invoices" on invoices for update
+using (company_id = my_company() and my_role() in ('Owner', 'Accountant', 'Sales', 'Manager'));
+
 -- 5. VENDORS: Allow Viewer & Manager to view vendors
 drop policy if exists "finance read vendors" on vendors;
 create policy "finance read vendors" on vendors for select 

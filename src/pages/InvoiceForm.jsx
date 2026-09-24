@@ -90,10 +90,8 @@ export default function InvoiceForm({ open, onClose, onSave, editing, ctx, busy 
     onSave({ ...form, items: validItems }, !editing, file);
   };
 
-  const canSetPayment = ctx.role !== "Sales";
   const statusOptions = ["Draft", "Sent", "Partially Paid", "Paid", "Overdue", "Cancelled"];
-  const allowedStatuses = canSetPayment ? statusOptions : Array.from(new Set(["Draft", "Sent", form.status].filter(Boolean)));
-  const paidAmountVisible = canSetPayment && form.status === "Partially Paid";
+  const paidAmountVisible = form.status === "Partially Paid";
 
   return (
     <Modal open={open} onClose={onClose} title={editing ? `Edit ${form.number}` : "New Sales Invoice"} width="max-w-3xl">
@@ -164,7 +162,7 @@ export default function InvoiceForm({ open, onClose, onSave, editing, ctx, busy 
           <div className="flex justify-between text-base font-semibold pt-1.5 mt-1.5" style={{ borderTop: `1px solid ${T.border}`, color: T.ink }}><span>Grand total</span><span>{INR(totals.grandTotal)}</span></div>
         </div>
         <div className="grid grid-cols-2 gap-3 mb-4">
-          <Field label="Status"><Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>{allowedStatuses.map((s) => <option key={s}>{s}</option>)}</Select></Field>
+          <Field label="Status"><Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>{statusOptions.map((s) => <option key={s}>{s}</option>)}</Select></Field>
           {paidAmountVisible && <Field label="Amount paid so far"><Input type="number" value={form.paidAmount} onChange={(e) => setForm({ ...form, paidAmount: Number(e.target.value) })} placeholder="Amount already received in ₹" /></Field>}
         </div>
         <div className="flex justify-end gap-2"><Btn variant="secondary" onClick={onClose}>Cancel</Btn><Btn icon={Save} onClick={submit} disabled={busy}>{busy ? "Saving…" : "Save invoice"}</Btn></div>
