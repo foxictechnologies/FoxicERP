@@ -31,7 +31,8 @@ alter table invoices add column if not exists pending_edit jsonb;
 alter table invoices add column if not exists delete_permission boolean not null default false;
 drop policy if exists "update invoices" on invoices;
 create policy "update invoices" on invoices for update
-using (company_id = my_company() and my_role() in ('Owner', 'Accountant', 'Sales', 'Manager'));
+using (company_id = my_company() and my_role() in ('Owner', 'Accountant', 'Sales', 'Manager') and status <> 'Paid')
+with check (company_id = my_company() and my_role() in ('Owner', 'Accountant', 'Sales', 'Manager'));
 drop policy if exists "owner deletes cancelled invoices" on invoices;
 drop policy if exists "authorized users delete cancelled invoices" on invoices;
 create policy "authorized users delete cancelled invoices" on invoices for delete

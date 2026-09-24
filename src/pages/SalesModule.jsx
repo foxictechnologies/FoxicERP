@@ -97,6 +97,10 @@ export default function SalesModule({ ctx }) {
   }).sort((a, b) => new Date(b.date) - new Date(a.date));
 
   const saveInvoice = async (inv, isNew, file) => {
+    if (!isNew && inv.status === "Paid") {
+      alert("A fully paid invoice is locked and cannot be edited.");
+      return;
+    }
     setBusy(true);
     try {
       let attachmentUrl = inv.attachmentUrl || null;
@@ -191,6 +195,10 @@ export default function SalesModule({ ctx }) {
   const applyApprovedEdit = async (invoiceId) => {
     const pending = pendingEdits[invoiceId];
     if (!pending || !isApprover) return;
+    if (pending.original.status === "Paid") {
+      alert("A fully paid invoice is locked and cannot be edited.");
+      return;
+    }
     setBusy(true);
     try {
       const previous = invoices.find((item) => item.id === invoiceId) || pending.original;
@@ -247,6 +255,10 @@ export default function SalesModule({ ctx }) {
   };
 
   const cancelInvoice = async (inv) => {
+    if (inv.status === "Paid") {
+      alert("A fully paid invoice is locked and cannot be cancelled.");
+      return;
+    }
     if (inv.status === "Cancelled") return;
     if (!confirm(`Cancel invoice ${inv.number}? Stock will be returned and this cannot be undone.`)) return;
     try {
@@ -330,10 +342,10 @@ export default function SalesModule({ ctx }) {
                       <td className="px-4 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
                         {!isViewer && (
                           <div className="flex justify-end gap-1">
-                            {!pending && <button title={isApprover ? "Edit invoice" : "Request invoice edit"} onClick={() => { setEditing(inv); setShowForm(true); }} className="p-1.5 rounded-md hover:bg-gray-100"><Edit2 size={14} color={T.inkSoft} /></button>}
+                            {!pending && inv.status !== "Paid" && <button title={isApprover ? "Edit invoice" : "Request invoice edit"} onClick={() => { setEditing(inv); setShowForm(true); }} className="p-1.5 rounded-md hover:bg-gray-100"><Edit2 size={14} color={T.inkSoft} /></button>}
                             {pending && isApprover && <><AcceptBtn onClick={() => applyApprovedEdit(inv.id)}>Accept</AcceptBtn><RejectBtn onClick={() => rejectEditRequest(inv.id)}>Reject</RejectBtn></>}
                             {pending && !isApprover && <CancelBtn onClick={() => cancelEditRequest(inv.id)} title="Cancel edit request" />}
-                            {inv.status !== "Cancelled" && <button title="Cancel invoice" onClick={() => cancelInvoice(inv)} className="p-1.5 rounded-md hover:bg-gray-100"><XCircle size={14} color={T.red} /></button>}
+                            {inv.status !== "Cancelled" && inv.status !== "Paid" && <button title="Cancel invoice" onClick={() => cancelInvoice(inv)} className="p-1.5 rounded-md hover:bg-gray-100"><XCircle size={14} color={T.red} /></button>}
                             {inv.status === "Cancelled" && isApprover && <button title={inv.deletePermission ? "Revoke Sales delete permission" : "Allow Sales to delete"} onClick={() => toggleDeletePermission(inv)} className="p-1.5 rounded-md hover:bg-gray-100"><ShieldCheck size={14} color={inv.deletePermission ? T.emerald : T.inkSoft} /></button>}
                             {inv.status === "Cancelled" && (isOwner || isManager || (role === "Sales" && inv.deletePermission === true)) && <button title="Delete cancelled invoice" onClick={() => deleteInvoice(inv)} className="p-1.5 rounded-md hover:bg-gray-100"><Trash2 size={14} color={T.red} /></button>}
                           </div>
