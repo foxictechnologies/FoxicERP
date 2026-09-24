@@ -196,6 +196,7 @@ create policy "finance write vendors" on vendors for all using (company_id = my_
 create policy "read invoices" on invoices for select using (company_id = my_company() and my_role() in ('Owner','Accountant','Sales','Manager','Viewer'));
 create policy "write invoices" on invoices for insert with check (company_id = my_company() and my_role() in ('Owner','Accountant','Sales'));
 create policy "update invoices" on invoices for update using (company_id = my_company() and my_role() in ('Owner','Accountant','Sales','Manager'));
+create policy "owner deletes cancelled invoices" on invoices for delete using (company_id = my_company() and my_role() = 'Owner' and status = 'Cancelled');
 
 -- PURCHASES / EXPENSES / PAYMENTS:
 create policy "finance read purchases" on purchases for select using (company_id = my_company() and my_role() in ('Owner','Accountant','Manager','Viewer'));

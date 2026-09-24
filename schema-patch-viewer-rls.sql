@@ -31,6 +31,9 @@ alter table invoices add column if not exists pending_edit jsonb;
 drop policy if exists "update invoices" on invoices;
 create policy "update invoices" on invoices for update
 using (company_id = my_company() and my_role() in ('Owner', 'Accountant', 'Sales', 'Manager'));
+drop policy if exists "owner deletes cancelled invoices" on invoices;
+create policy "owner deletes cancelled invoices" on invoices for delete
+using (company_id = my_company() and my_role() = 'Owner' and status = 'Cancelled');
 
 -- 5. VENDORS: Allow Viewer & Manager to view vendors
 drop policy if exists "finance read vendors" on vendors;

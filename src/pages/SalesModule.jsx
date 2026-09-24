@@ -13,11 +13,11 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Plus, Search, Edit2, XCircle, FileText, Paperclip, Clock, ShieldAlert } from "lucide-react";
+import { Plus, Search, Edit2, XCircle, Trash2, FileText, Paperclip, Clock, ShieldAlert } from "lucide-react";
 import { T } from "../lib/constants";
 import { INR, fmtDate, uid } from "../lib/format";
 import { Card, Badge, Btn, EmptyState, SectionHeader, statusTone, AcceptBtn, RejectBtn, CancelBtn } from "../components/ui";
-import { insertRow, updateRow, uploadAttachment } from "../lib/db";
+import { insertRow, updateRow, deleteRow, uploadAttachment } from "../lib/db";
 import InvoiceForm from "./InvoiceForm";
 import InvoiceView from "./InvoiceView";
 
@@ -259,6 +259,27 @@ export default function SalesModule({ ctx }) {
     } catch (e) { alert("Could not cancel invoice: " + e.message); }
   };
 
+  const deleteInvoice = async (inv) => {
+    if (!isOwner) {
+      alert("Only the Business Owner can delete invoices.");
+      return;
+    }
+    if (inv.status !== "Cancelled") {
+      alert("Only cancelled invoices can be deleted.");
+      return;
+    }
+    if (!confirm(`Delete cancelled invoice ${inv.number}? This cannot be undone.`)) return;
+    try {
+      await deleteRow("invoices", inv.id);
+      setInvoices((prev) => prev.filter((item) => item.id !== inv.id));
+      const nextPending = { ...pendingEdits }; delete nextPending[inv.id];
+      savePendingInvoiceEdits(company.id, nextPending); setPendingEdits(nextPending);
+      ctx.logAudit("Invoice deleted", `${inv.number} (cancelled)`);
+    } catch (e) {
+      alert("Could not delete invoice: " + e.message);
+    }
+  };
+
   const isViewer = role === "Viewer";
   const pendingCount = Object.keys(pendingEdits).length;
 
@@ -298,7 +319,8 @@ export default function SalesModule({ ctx }) {
                             {!pending && <button title={isApprover ? "Edit invoice" : "Request invoice edit"} onClick={() => { setEditing(inv); setShowForm(true); }} className="p-1.5 rounded-md hover:bg-gray-100"><Edit2 size={14} color={T.inkSoft} /></button>}
                             {pending && isApprover && <><AcceptBtn onClick={() => applyApprovedEdit(inv.id)}>Accept</AcceptBtn><RejectBtn onClick={() => rejectEditRequest(inv.id)}>Reject</RejectBtn></>}
                             {pending && !isApprover && <CancelBtn onClick={() => cancelEditRequest(inv.id)} title="Cancel edit request" />}
-                            {inv.status !== "Cancelled" && <button title="Cancel" onClick={() => cancelInvoice(inv)} className="p-1.5 rounded-md hover:bg-gray-100"><XCircle size={14} color={T.red} /></button>}
+                            {inv.status !== "Cancelled" && <button title="Cancel invoice" onClick={() => cancelInvoice(inv)} className="p-1.5 rounded-md hover:bg-gray-100"><XCircle size={14} color={T.red} /></button>}
+                            {isOwner && inv.status === "Cancelled" && <button title="Delete cancelled invoice" onClick={() => deleteInvoice(inv)} className="p-1.5 rounded-md hover:bg-gray-100"><Trash2 size={14} color={T.red} /></button>}
                           </div>
                         )}
                       </td>
