@@ -141,16 +141,16 @@ export default function PurchasesModule({ ctx }) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-            <Field label="GST Calculation Mode" hint={currentVendor ? (wouldBeInterState ? "Vendor state differs from yours — Auto uses IGST" : "Same state as yours — Auto uses CGST + SGST") : "Select a vendor to check state rule"}>
+            <Field label="GST Calculation Mode" hint={currentVendor ? (wouldBeInterState ? "Vendor state differs from yours — Auto uses GST" : "Same state as yours — Auto uses CGST + SGST") : "Select a vendor to check state rule"}>
               <Select value={form.taxType || "auto"} onChange={(e) => setForm({ ...form, taxType: e.target.value })}>
                 <option value="auto">Auto — based on vendor's state (recommended)</option>
                 <option value="cgst_sgst">Force CGST + SGST (intra-state)</option>
-                <option value="igst">Force IGST (inter-state)</option>
+                <option value="igst">Force GST (inter-state)</option>
               </Select>
             </Field>
             {currentVendor && (
               <div className="text-xs px-3 py-2 rounded-lg self-end" style={{ background: totals.interState ? T.amberWash : T.navyWash, color: totals.interState ? T.amber : T.navy }}>
-                Calculates <b>{totals.interState ? "IGST" : "CGST + SGST"}</b> · Place of supply: {currentVendor.state || "Unspecified"}
+                Calculates <b>{totals.interState ? "GST" : "CGST + SGST"}</b> · Place of supply: {currentVendor.state || "Unspecified"}
                 {form.taxType && form.taxType !== "auto" && <div className="mt-1">⚠ Manual tax override active</div>}
               </div>
             )}
@@ -189,14 +189,7 @@ export default function PurchasesModule({ ctx }) {
 
           <div className="rounded-lg p-3 mb-4" style={{ background: T.borderSoft }}>
             <div className="flex justify-between text-sm py-0.5"><span style={{ color: T.inkSoft }}>Taxable value</span><span>{INR2(totals.taxable)}</span></div>
-            {totals.interState ? (
-              <div className="flex justify-between text-sm py-0.5"><span style={{ color: T.inkSoft }}>IGST</span><span>{INR2(totals.igst)}</span></div>
-            ) : (
-              <>
-                <div className="flex justify-between text-sm py-0.5"><span style={{ color: T.inkSoft }}>CGST</span><span>{INR2(totals.cgst)}</span></div>
-                <div className="flex justify-between text-sm py-0.5"><span style={{ color: T.inkSoft }}>SGST</span><span>{INR2(totals.sgst)}</span></div>
-              </>
-            )}
+            <div className="flex justify-between text-sm py-0.5"><span style={{ color: T.inkSoft }}>GST</span><span>{INR2(totals.igst + totals.cgst + totals.sgst)}</span></div>
             <div className="flex justify-between text-sm py-0.5"><span style={{ color: T.inkSoft }}>Round off</span><span>{INR2(totals.roundOff)}</span></div>
             <div className="flex justify-between text-base font-semibold pt-1.5 mt-1.5" style={{ borderTop: `1px solid ${T.border}`, color: T.ink }}><span>Total amount</span><span>{INR(totals.grandTotal)}</span></div>
           </div>
@@ -238,13 +231,13 @@ export function PurchaseView({ pur, onClose, ctx }) {
           <div><span style={{ color: T.inkFaint }}>Place of supply: </span>{v.state}</div>
         </div>
         <table className="w-full text-xs mb-4">
-          <thead><tr style={{ background: T.borderSoft }}>{["Item", "HSN", "Qty", "Rate", "Taxable", totals.interState ? "IGST" : "CGST+SGST", "Total"].map((h) => <th key={h} className="text-left px-2 py-1.5 font-medium" style={{ color: T.inkSoft }}>{h}</th>)}</tr></thead>
-          <tbody>{totals.lines.map((l, i) => <tr key={i} style={{ borderBottom: `1px solid ${T.borderSoft}` }}><td className="px-2 py-1.5">{l.product.name}</td><td className="px-2 py-1.5">{l.product.hsn}</td><td className="px-2 py-1.5">{l.qty} {l.product.unit}</td><td className="px-2 py-1.5">{INR2(l.rate)}</td><td className="px-2 py-1.5">{INR2(l.lineTaxable)}</td><td className="px-2 py-1.5">{INR2(totals.interState ? l.igst : l.cgst + l.sgst)} ({l.gstRate}%)</td><td className="px-2 py-1.5 font-medium">{INR2(l.lineTotal)}</td></tr>)}</tbody>
+          <thead><tr style={{ background: T.borderSoft }}>{["Item", "HSN", "Qty", "Rate", "Taxable", "GST", "Total"].map((h) => <th key={h} className="text-left px-2 py-1.5 font-medium" style={{ color: T.inkSoft }}>{h}</th>)}</tr></thead>
+          <tbody>{totals.lines.map((l, i) => <tr key={i} style={{ borderBottom: `1px solid ${T.borderSoft}` }}><td className="px-2 py-1.5">{l.product.name}</td><td className="px-2 py-1.5">{l.product.hsn}</td><td className="px-2 py-1.5">{l.qty} {l.product.unit}</td><td className="px-2 py-1.5">{INR2(l.rate)}</td><td className="px-2 py-1.5">{INR2(l.lineTaxable)}</td><td className="px-2 py-1.5">{INR2(l.igst + l.cgst + l.sgst)} ({l.gstRate}%)</td><td className="px-2 py-1.5 font-medium">{INR2(l.lineTotal)}</td></tr>)}</tbody>
         </table>
         <div className="flex justify-end mb-4">
           <div className="w-56 text-sm">
             <div className="flex justify-between py-0.5"><span style={{ color: T.inkSoft }}>Taxable value</span><span>{INR2(totals.taxable)}</span></div>
-            {totals.interState ? <div className="flex justify-between py-0.5"><span style={{ color: T.inkSoft }}>IGST</span><span>{INR2(totals.igst)}</span></div> : (<><div className="flex justify-between py-0.5"><span style={{ color: T.inkSoft }}>CGST</span><span>{INR2(totals.cgst)}</span></div><div className="flex justify-between py-0.5"><span style={{ color: T.inkSoft }}>SGST</span><span>{INR2(totals.sgst)}</span></div></>)}
+            <div className="flex justify-between py-0.5"><span style={{ color: T.inkSoft }}>GST</span><span>{INR2(totals.igst + totals.cgst + totals.sgst)}</span></div>
             <div className="flex justify-between py-0.5"><span style={{ color: T.inkSoft }}>Round off</span><span>{INR2(totals.roundOff)}</span></div>
             <div className="flex justify-between font-semibold text-base pt-1.5 mt-1" style={{ borderTop: `1px solid ${T.border}` }}><span>Grand total</span><span>{INR(totals.grandTotal)}</span></div>
           </div>
