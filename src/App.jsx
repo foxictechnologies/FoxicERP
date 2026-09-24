@@ -751,11 +751,13 @@ useEffect(() => {
 
   // Which sidebar tabs the current role can see
   const rawRole = profile?.role || "Sales";
-  const role = rawRole === "Operations Manager" ? "Manager" :
-               rawRole === "Business Owner" ? "Owner" :
-               rawRole === "Sales Employee" ? "Sales" :
-               rawRole === "Inventory Manager" ? "Inventory" :
-               rawRole === "Viewer (Read Only)" ? "Viewer" : rawRole;
+  const normalizedRole = String(rawRole).trim().toLowerCase();
+  const role = ["owner", "business owner"].includes(normalizedRole) ? "Owner" :
+               ["manager", "operations manager"].includes(normalizedRole) ? "Manager" :
+               ["sales", "sales employee", "sales person", "salesperson"].includes(normalizedRole) ? "Sales" :
+               ["inventory", "inventory manager"].includes(normalizedRole) ? "Inventory" :
+               ["viewer", "viewer (read only)"].includes(normalizedRole) ? "Viewer" :
+               ["accountant"].includes(normalizedRole) ? "Accountant" : rawRole;
 
   const roleObj = ROLES[role] || ROLES["Sales"];
   const visibleTabs = roleObj.tabs === "*" ? NAV.map((n) => n.id) : (roleObj.tabs || NAV.map((n) => n.id));
