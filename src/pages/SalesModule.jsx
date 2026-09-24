@@ -15,7 +15,7 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Search, Edit2, XCircle, FileText, Paperclip } from "lucide-react";
 import { T } from "../lib/constants";
-import { INR, fmtDate } from "../lib/format";
+import { INR, fmtDate, uid } from "../lib/format";
 import { Card, Badge, Btn, EmptyState, SectionHeader, statusTone } from "../components/ui";
 import { insertRow, updateRow, uploadAttachment } from "../lib/db";
 import InvoiceForm from "./InvoiceForm";
