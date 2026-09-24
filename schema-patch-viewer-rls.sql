@@ -27,8 +27,8 @@ create policy "sales submits payment approvals" on payments for insert
 with check (company_id = my_company() and my_role() = 'Sales' and approval_status = 'Pending');
 drop policy if exists "owner manager approve payments" on payments;
 create policy "owner manager approve payments" on payments for update
-using (company_id = my_company() and my_role() in ('Owner','Manager') and approval_status = 'Pending')
-with check (company_id = my_company() and my_role() in ('Owner','Manager'));
+using (company_id = my_company() and my_role() in ('Owner','Manager','Accountant') and approval_status = 'Pending')
+with check (company_id = my_company() and my_role() in ('Owner','Manager','Accountant'));
 
 -- 4. INVOICES: Allow Viewer & Manager to view invoices
 drop policy if exists "read invoices" on invoices;

@@ -214,8 +214,8 @@ create policy "finance write payments" on payments for all using (company_id = m
 create policy "sales submits payment approvals" on payments for insert
 with check (company_id = my_company() and my_role() = 'Sales' and approval_status = 'Pending');
 create policy "owner manager approve payments" on payments for update
-using (company_id = my_company() and my_role() in ('Owner','Manager') and approval_status = 'Pending')
-with check (company_id = my_company() and my_role() in ('Owner','Manager'));
+using (company_id = my_company() and my_role() in ('Owner','Manager','Accountant') and approval_status = 'Pending')
+with check (company_id = my_company() and my_role() in ('Owner','Manager','Accountant'));
 
 -- STOCK LEDGER: Owner and Inventory only
 create policy "inventory read ledger" on stock_ledger for select using (company_id = my_company() and my_role() in ('Owner','Inventory'));

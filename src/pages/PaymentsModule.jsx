@@ -22,7 +22,7 @@ export default function PaymentsModule({ ctx }) {
   const { payments, setPayments, invoices, setInvoices, customers } = ctx;
   const isViewer = ctx.role === "Viewer";
   const isSales = ctx.role === "Sales";
-  const isApprover = ctx.role === "Owner" || ctx.role === "Manager";
+  const isApprover = ["Owner", "Manager", "Accountant"].includes(ctx.role);
   const [showForm, setShowForm] = useState(false);
   const [file, setFile] = useState(null);
   const openInvoices = invoices.filter((i) => i.status === "Sent" || i.status === "Partially Paid" || i.status === "Overdue");
