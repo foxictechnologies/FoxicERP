@@ -27,6 +27,7 @@ create policy "read invoices" on invoices for select
 using (company_id = my_company() and my_role() in ('Owner', 'Accountant', 'Sales', 'Manager', 'Viewer'));
 
 -- 4b. INVOICES: Managers can apply edits accepted from Sales requests.
+alter table invoices add column if not exists pending_edit jsonb;
 drop policy if exists "update invoices" on invoices;
 create policy "update invoices" on invoices for update
 using (company_id = my_company() and my_role() in ('Owner', 'Accountant', 'Sales', 'Manager'));

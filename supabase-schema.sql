@@ -65,6 +65,7 @@ create table invoices (
   number text not null, date date not null, due_date date, customer_id uuid references customers(id),
   status text default 'Draft', items jsonb not null, paid_amount numeric default 0,
   attachment_url text, tax_type text default 'auto',
+  pending_edit jsonb,
   created_by uuid references profiles(id), created_at timestamptz default now()
 );
 

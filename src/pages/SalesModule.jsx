@@ -81,8 +81,13 @@ export default function SalesModule({ ctx }) {
   }, [ctx.globalFocus]); // eslint-disable-line
 
   useEffect(() => {
-    if (company?.id) setPendingEdits(getPendingInvoiceEdits(company.id));
-  }, [company?.id]);
+    if (!company?.id) return;
+    const persisted = invoices.reduce((requests, invoice) => {
+      if (invoice.pendingEdit) requests[invoice.id] = invoice.pendingEdit;
+      return requests;
+    }, {});
+    setPendingEdits(Object.keys(persisted).length ? persisted : getPendingInvoiceEdits(company.id));
+  }, [company?.id, invoices]);
 
   const filtered = invoices.filter((i) => {
     const cust = ctx.getCustomer(i.customerId);
@@ -111,7 +116,13 @@ export default function SalesModule({ ctx }) {
           createdAt: new Date().toISOString()
         };
         const nextPending = { ...pendingEdits, [inv.id]: pendingItem };
-        savePendingInvoiceEdits(company.id, nextPending);
+        try {
+          await updateRow("invoices", inv.id, { pendingEdit: pendingItem });
+        } catch (err) {
+          console.warn("Supabase invoice edit request fallback:", err);
+          savePendingInvoiceEdits(company.id, nextPending);
+        }
+        setInvoices((prev) => prev.map((item) => item.id === inv.id ? { ...item, pendingEdit: pendingItem } : item));
         setPendingEdits(nextPending);
         ctx.logAudit("Invoice edit requested", `${inv.number} by ${pendingItem.requestedBy}`);
         alert("Invoice edit request submitted. It will take effect after Owner or Manager approval.");
@@ -183,7 +194,7 @@ export default function SalesModule({ ctx }) {
     setBusy(true);
     try {
       const previous = invoices.find((item) => item.id === invoiceId) || pending.original;
-      const next = pending.updated;
+      const next = { ...pending.updated, pendingEdit: null };
       let row = next;
       try {
         const updated = await updateRow("invoices", invoiceId, next);
@@ -220,6 +231,7 @@ export default function SalesModule({ ctx }) {
     const pending = pendingEdits[invoiceId];
     if (!pending || !isApprover) return;
     const nextPending = { ...pendingEdits }; delete nextPending[invoiceId];
+    updateRow("invoices", invoiceId, { pendingEdit: null }).catch((err) => console.warn("Could not clear invoice request in Supabase:", err));
     savePendingInvoiceEdits(company.id, nextPending); setPendingEdits(nextPending);
     ctx.logAudit("Invoice edit rejected", `${pending.updated.number} requested by ${pending.requestedBy}`);
     alert(`Invoice edit rejected for ${pending.updated.number}.`);
@@ -229,6 +241,7 @@ export default function SalesModule({ ctx }) {
     const pending = pendingEdits[invoiceId];
     if (!pending || isApprover) return;
     const nextPending = { ...pendingEdits }; delete nextPending[invoiceId];
+    updateRow("invoices", invoiceId, { pendingEdit: null }).catch((err) => console.warn("Could not clear invoice request in Supabase:", err));
     savePendingInvoiceEdits(company.id, nextPending); setPendingEdits(nextPending);
     ctx.logAudit("Invoice edit request cancelled", `${pending.updated.number}`);
   };
